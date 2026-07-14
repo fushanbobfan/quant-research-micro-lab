@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import quant_research_micro_lab
 from quant_research_micro_lab.cli import load_price_csv, main
 
 
@@ -13,6 +14,9 @@ class PriceCsvTests(unittest.TestCase):
         path = Path(directory) / "prices.csv"
         path.write_text(contents, encoding="utf-8")
         return path
+
+    def test_csv_loader_is_available_from_package(self):
+        self.assertIs(quant_research_micro_lab.load_price_csv, load_price_csv)
 
     def test_loads_iso_dates_and_positive_closes(self):
         with tempfile.TemporaryDirectory() as directory:
