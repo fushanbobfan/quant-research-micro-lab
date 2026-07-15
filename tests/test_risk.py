@@ -5,10 +5,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import quant_research_micro_lab
 from quant_research_micro_lab.risk import analyze_drawdowns, load_equity_csv, main
 
 
 class DrawdownAnalysisTests(unittest.TestCase):
+    def test_risk_apis_are_available_from_package(self):
+        self.assertIs(quant_research_micro_lab.analyze_drawdowns, analyze_drawdowns)
+        self.assertIs(quant_research_micro_lab.load_equity_csv, load_equity_csv)
+
     def test_reports_recovered_and_open_drawdown_episodes(self):
         report = analyze_drawdowns([1.0, 0.9, 0.8, 1.0, 1.1, 1.0, 0.99])
 
