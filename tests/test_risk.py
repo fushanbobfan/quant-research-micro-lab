@@ -1,6 +1,11 @@
+import contextlib
+import io
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
-from quant_research_micro_lab.risk import analyze_drawdowns
+from quant_research_micro_lab.risk import analyze_drawdowns, load_equity_csv, main
 
 
 class DrawdownAnalysisTests(unittest.TestCase):
@@ -45,6 +50,69 @@ class DrawdownAnalysisTests(unittest.TestCase):
             with self.subTest(values=values):
                 with self.assertRaisesRegex(ValueError, "finite positive"):
                     analyze_drawdowns(values)
+
+    def test_loads_net_or_gross_equity_from_backtest_export(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "equity.csv"
+            dataset.write_text(
+                "date,equity,gross_equity\n"
+                "2026-01-01,1.0,1.0\n"
+                "2026-01-02,0.9,0.95\n",
+                encoding="utf-8",
+            )
+
+            dates, gross = load_equity_csv(dataset, "gross_equity")
+
+            self.assertEqual(dates, ["2026-01-01", "2026-01-02"])
+            self.assertEqual(gross, [1.0, 0.95])
+
+    def test_loader_rejects_bad_headers_dates_and_values(self):
+        cases = [
+            ("date,equity\n2026-01-01,1\n", "header"),
+            (
+                "date,equity,gross_equity\n2026-01-02,1,1\n2026-01-01,1,1\n",
+                "date",
+            ),
+            ("date,equity,gross_equity\n2026-01-01,nan,1\n", "equity"),
+        ]
+        for contents, message in cases:
+            with self.subTest(message=message):
+                with tempfile.TemporaryDirectory() as directory:
+                    dataset = Path(directory) / "equity.csv"
+                    dataset.write_text(contents, encoding="utf-8")
+                    with self.assertRaisesRegex(ValueError, message):
+                        load_equity_csv(dataset)
+
+    def test_cli_adds_dates_to_drawdown_episodes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "equity.csv"
+            dataset.write_text(
+                "date,equity,gross_equity\n"
+                "2026-01-01,1.0,1.0\n"
+                "2026-01-02,0.8,0.9\n"
+                "2026-01-03,1.0,1.1\n",
+                encoding="utf-8",
+            )
+            stdout = io.StringIO()
+
+            with contextlib.redirect_stdout(stdout):
+                exit_code = main([str(dataset)])
+
+            report = json.loads(stdout.getvalue())
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(report["maximum_drawdown"]["peak_date"], "2026-01-01")
+            self.assertEqual(report["maximum_drawdown"]["trough_date"], "2026-01-02")
+            self.assertEqual(report["maximum_drawdown"]["recovery_date"], "2026-01-03")
+
+    def test_cli_returns_two_for_invalid_input(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "equity.csv"
+            dataset.write_text("wrong,header\n", encoding="utf-8")
+
+            with contextlib.redirect_stderr(io.StringIO()):
+                exit_code = main([str(dataset)])
+
+            self.assertEqual(exit_code, 2)
 
 
 if __name__ == "__main__":

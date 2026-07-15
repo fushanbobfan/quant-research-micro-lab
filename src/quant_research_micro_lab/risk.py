@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import argparse
+import csv
+import json
 import math
+import sys
 from collections.abc import Sequence
+from datetime import date
 from numbers import Real
+from pathlib import Path
 from typing import Any
 
 
@@ -82,3 +88,89 @@ def analyze_drawdowns(equity: Sequence[float]) -> dict[str, Any]:
         "longest_underwater": longest,
         "episodes": episodes,
     }
+
+
+def load_equity_csv(path: Path, column: str = "equity") -> tuple[list[str], list[float]]:
+    """Load a net or gross curve from the backtest equity export format."""
+
+    if column not in {"equity", "gross_equity"}:
+        raise ValueError("column must be equity or gross_equity")
+
+    dates: list[str] = []
+    values: list[float] = []
+    previous_date: date | None = None
+    with path.open(newline="", encoding="utf-8-sig") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames != ["date", "equity", "gross_equity"]:
+            raise ValueError("CSV header must be exactly: date,equity,gross_equity")
+
+        for row_number, row in enumerate(reader, start=2):
+            try:
+                parsed_date = date.fromisoformat(row.get("date") or "")
+            except ValueError as error:
+                raise ValueError(f"row {row_number} has an invalid ISO date") from error
+            if previous_date is not None and parsed_date <= previous_date:
+                raise ValueError(f"row {row_number} date must be strictly increasing")
+            try:
+                value = float(row.get(column) or "")
+            except ValueError as error:
+                raise ValueError(f"row {row_number} has an invalid {column}") from error
+            if not math.isfinite(value) or value <= 0:
+                raise ValueError(
+                    f"row {row_number} {column} must be finite and positive"
+                )
+
+            dates.append(parsed_date.isoformat())
+            values.append(value)
+            previous_date = parsed_date
+
+    if not dates:
+        raise ValueError("CSV must contain at least one equity row")
+    return dates, values
+
+
+def _add_dates(episode: dict[str, Any] | None, dates: Sequence[str]) -> dict[str, Any] | None:
+    if episode is None:
+        return None
+    recovery_index = episode["recovery_index"]
+    return {
+        **episode,
+        "peak_date": dates[episode["peak_index"]],
+        "trough_date": dates[episode["trough_index"]],
+        "recovery_date": dates[recovery_index] if recovery_index is not None else None,
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("dataset", type=Path)
+    parser.add_argument(
+        "--column",
+        choices=("equity", "gross_equity"),
+        default="equity",
+        help="curve to analyze from a quant-backtest equity export",
+    )
+    args = parser.parse_args(argv)
+
+    try:
+        dates, values = load_equity_csv(args.dataset, args.column)
+        report = analyze_drawdowns(values)
+    except (OSError, UnicodeError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+    report = {
+        **report,
+        "column": args.column,
+        "start_date": dates[0],
+        "end_date": dates[-1],
+        "maximum_drawdown": _add_dates(report["maximum_drawdown"], dates),
+        "longest_underwater": _add_dates(report["longest_underwater"], dates),
+        "episodes": [_add_dates(episode, dates) for episode in report["episodes"]],
+    }
+    print(json.dumps(report, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
