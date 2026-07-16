@@ -5,11 +5,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import quant_research_micro_lab
 from quant_research_micro_lab.sweep import main, sweep_crossover
 
 
 class ParameterSweepTests(unittest.TestCase):
     prices = [10, 10, 10, 11, 12, 13, 12, 11, 12, 13]
+
+    def test_sweep_api_is_available_from_package(self):
+        self.assertIs(quant_research_micro_lab.sweep_crossover, sweep_crossover)
 
     def test_sweep_ranks_every_valid_pair_and_records_skips(self):
         report = sweep_crossover(

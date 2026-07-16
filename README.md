@@ -36,4 +36,19 @@ python -m quant_research_micro_lab.risk equity.csv
 
 Use `--column gross_equity` to inspect the pre-cost curve. The deterministic JSON report includes the current drawdown, maximum drawdown episode, longest underwater episode, and every episode in chronological order. Each episode records peak, trough, and optional recovery dates plus the number of underwater observations. Observation counts are intentionally distinct from calendar-day duration so irregular market calendars are not misrepresented.
 
+## Parameter grid evaluation
+
+Evaluate several crossover settings against the same validated price history without writing custom loops. Repeat each window option to define the grid:
+
+```powershell
+python -m quant_research_micro_lab.sweep examples/synthetic_prices.csv `
+  --short-window 2 --short-window 3 `
+  --long-window 4 --long-window 5 `
+  --transaction-cost-bps 10 --rank-by total_return
+```
+
+The compact JSON report ranks every valid short/long pair and preserves invalid pairs in `skipped_pairs` instead of silently losing them. Rankings are deterministic, including window-based tie breaking. `total_return` and `maximum_drawdown` are maximized; `annualized_volatility` and `total_turnover` are minimized. Full equity curves remain available through `quant-backtest` for any candidate that merits closer inspection.
+
+Parameter rankings are in-sample comparisons, not evidence of future performance. Use held-out data and account for multiple testing before drawing research conclusions.
+
 The example uses synthetic prices to show how greater costs reduce the reported net result. This project is educational software, not investment advice. It does not execute trades or make return guarantees; examples should use synthetic or properly licensed data.
