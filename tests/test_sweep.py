@@ -1,6 +1,11 @@
+import contextlib
+import io
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
-from quant_research_micro_lab.sweep import sweep_crossover
+from quant_research_micro_lab.sweep import main, sweep_crossover
 
 
 class ParameterSweepTests(unittest.TestCase):
@@ -66,6 +71,65 @@ class ParameterSweepTests(unittest.TestCase):
                 short_windows=[2],
                 long_windows=[3],
             )
+
+    def test_cli_loads_csv_and_reports_ranked_candidates(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "prices.csv"
+            dataset.write_text(
+                "date,close\n"
+                "2026-01-01,10\n"
+                "2026-01-02,10\n"
+                "2026-01-03,10\n"
+                "2026-01-04,11\n"
+                "2026-01-05,12\n"
+                "2026-01-06,13\n",
+                encoding="utf-8",
+            )
+            stdout = io.StringIO()
+
+            with contextlib.redirect_stdout(stdout):
+                exit_code = main(
+                    [
+                        str(dataset),
+                        "--short-window",
+                        "1",
+                        "--short-window",
+                        "2",
+                        "--long-window",
+                        "3",
+                        "--long-window",
+                        "4",
+                        "--transaction-cost-bps",
+                        "10",
+                    ]
+                )
+
+            report = json.loads(stdout.getvalue())
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(report["observations"], 6)
+            self.assertEqual(report["candidate_count"], 4)
+            self.assertEqual(report["transaction_cost_bps"], 10.0)
+
+    def test_cli_returns_two_for_an_invalid_grid(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "prices.csv"
+            dataset.write_text(
+                "date,close\n2026-01-01,10\n2026-01-02,11\n2026-01-03,12\n",
+                encoding="utf-8",
+            )
+
+            with contextlib.redirect_stderr(io.StringIO()):
+                exit_code = main(
+                    [
+                        str(dataset),
+                        "--short-window",
+                        "3",
+                        "--long-window",
+                        "2",
+                    ]
+                )
+
+            self.assertEqual(exit_code, 2)
 
 
 if __name__ == "__main__":

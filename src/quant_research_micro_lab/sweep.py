@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import argparse
+import json
+import sys
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 
 from .backtest import backtest_crossover
+from .cli import load_price_csv
 
 
 _RANK_DIRECTIONS = {
@@ -95,7 +100,58 @@ def sweep_crossover(
     return {
         "rank_by": rank_by,
         "direction": direction,
+        "transaction_cost_bps": transaction_cost_bps,
         "candidate_count": len(results),
         "skipped_pairs": skipped_pairs,
         "results": results,
     }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("dataset", type=Path)
+    parser.add_argument(
+        "--short-window",
+        type=int,
+        action="append",
+        required=True,
+        dest="short_windows",
+        help="short lookback; repeat to build the grid",
+    )
+    parser.add_argument(
+        "--long-window",
+        type=int,
+        action="append",
+        required=True,
+        dest="long_windows",
+        help="long lookback; repeat to build the grid",
+    )
+    parser.add_argument("--transaction-cost-bps", type=float, default=0.0)
+    parser.add_argument("--rank-by", choices=tuple(_RANK_DIRECTIONS), default="total_return")
+    args = parser.parse_args(argv)
+
+    try:
+        dates, prices = load_price_csv(args.dataset)
+        result = sweep_crossover(
+            prices,
+            short_windows=args.short_windows,
+            long_windows=args.long_windows,
+            transaction_cost_bps=args.transaction_cost_bps,
+            rank_by=args.rank_by,
+        )
+    except (OSError, UnicodeError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+    report = {
+        "observations": len(dates),
+        "start_date": dates[0],
+        "end_date": dates[-1],
+        **result,
+    }
+    print(json.dumps(report, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
