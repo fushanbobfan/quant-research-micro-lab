@@ -1,7 +1,13 @@
+import contextlib
+import io
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
+import quant_research_micro_lab
 from quant_research_micro_lab.sweep import sweep_crossover
-from quant_research_micro_lab.walk_forward import walk_forward_crossover
+from quant_research_micro_lab.walk_forward import main, walk_forward_crossover
 
 
 class WalkForwardTests(unittest.TestCase):
@@ -28,6 +34,11 @@ class WalkForwardTests(unittest.TestCase):
         14,
         13,
     ]
+
+    def test_walk_forward_api_is_available_from_package(self):
+        self.assertIs(
+            quant_research_micro_lab.walk_forward_crossover, walk_forward_crossover
+        )
 
     def test_rolling_folds_select_only_on_training_data(self):
         report = walk_forward_crossover(
@@ -111,6 +122,76 @@ class WalkForwardTests(unittest.TestCase):
             with self.subTest(bad_price=bad_price):
                 with self.assertRaisesRegex(ValueError, "finite positive"):
                     walk_forward_crossover([10, 11, bad_price, 13, 14, 15, 16], **base)
+
+    def test_cli_reports_dated_folds_from_validated_csv(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "prices.csv"
+            dataset.write_text(
+                "date,close\n"
+                + "\n".join(
+                    f"2026-01-{day:02d},{price}"
+                    for day, price in enumerate(self.prices[:14], start=1)
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            stdout = io.StringIO()
+
+            with contextlib.redirect_stdout(stdout):
+                exit_code = main(
+                    [
+                        str(dataset),
+                        "--short-window",
+                        "1",
+                        "--short-window",
+                        "2",
+                        "--long-window",
+                        "3",
+                        "--train-size",
+                        "8",
+                        "--test-size",
+                        "3",
+                        "--transaction-cost-bps",
+                        "10",
+                    ]
+                )
+
+            report = json.loads(stdout.getvalue())
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(report["observations"], 14)
+            self.assertEqual(report["fold_count"], 2)
+            self.assertEqual(report["folds"][0]["train_start_date"], "2026-01-01")
+            self.assertEqual(report["folds"][0]["test_start_date"], "2026-01-09")
+            self.assertEqual(report["folds"][1]["test_end_date"], "2026-01-14")
+
+    def test_cli_returns_two_when_no_full_fold_is_available(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "prices.csv"
+            dataset.write_text(
+                "date,close\n"
+                "2026-01-01,10\n"
+                "2026-01-02,11\n"
+                "2026-01-03,12\n"
+                "2026-01-04,13\n",
+                encoding="utf-8",
+            )
+
+            with contextlib.redirect_stderr(io.StringIO()):
+                exit_code = main(
+                    [
+                        str(dataset),
+                        "--short-window",
+                        "1",
+                        "--long-window",
+                        "2",
+                        "--train-size",
+                        "3",
+                        "--test-size",
+                        "2",
+                    ]
+                )
+
+            self.assertEqual(exit_code, 2)
 
 
 if __name__ == "__main__":

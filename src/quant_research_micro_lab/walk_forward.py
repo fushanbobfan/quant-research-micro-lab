@@ -2,12 +2,25 @@
 
 from __future__ import annotations
 
+import argparse
+import json
 import math
+import sys
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 
 from .backtest import backtest_crossover, maximum_drawdown
+from .cli import load_price_csv
 from .sweep import sweep_crossover
+
+
+_RANK_CHOICES = (
+    "total_return",
+    "maximum_drawdown",
+    "annualized_volatility",
+    "total_turnover",
+)
 
 
 def _positive_integer(name: str, value: int) -> int:
@@ -146,3 +159,55 @@ def walk_forward_crossover(
         },
         "folds": folds,
     }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("dataset", type=Path)
+    parser.add_argument("--short-window", type=int, action="append", required=True)
+    parser.add_argument("--long-window", type=int, action="append", required=True)
+    parser.add_argument("--train-size", type=int, required=True)
+    parser.add_argument("--test-size", type=int, required=True)
+    parser.add_argument("--transaction-cost-bps", type=float, default=0.0)
+    parser.add_argument("--rank-by", choices=_RANK_CHOICES, default="total_return")
+    args = parser.parse_args(argv)
+
+    try:
+        dates, prices = load_price_csv(args.dataset)
+        result = walk_forward_crossover(
+            prices,
+            short_windows=args.short_window,
+            long_windows=args.long_window,
+            train_size=args.train_size,
+            test_size=args.test_size,
+            transaction_cost_bps=args.transaction_cost_bps,
+            rank_by=args.rank_by,
+        )
+    except (OSError, UnicodeError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+    dated_folds = []
+    for fold in result["folds"]:
+        dated_folds.append(
+            {
+                **fold,
+                "train_start_date": dates[fold["train_start_index"]],
+                "train_end_date": dates[fold["train_end_index"]],
+                "test_start_date": dates[fold["test_start_index"]],
+                "test_end_date": dates[fold["test_end_index"]],
+            }
+        )
+    report = {
+        "observations": len(dates),
+        "start_date": dates[0],
+        "end_date": dates[-1],
+        **result,
+        "folds": dated_folds,
+    }
+    print(json.dumps(report, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
