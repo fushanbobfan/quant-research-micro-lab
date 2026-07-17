@@ -51,4 +51,20 @@ The compact JSON report ranks every valid short/long pair and preserves invalid 
 
 Parameter rankings are in-sample comparisons, not evidence of future performance. Use held-out data and account for multiple testing before drawing research conclusions.
 
+## Rolling walk-forward evaluation
+
+Use consecutive training and test windows to check how parameter selection behaves outside the data that ranked it. Each fold chooses the top crossover pair only from its rolling training window, then measures that pair over the immediately following, non-overlapping test window:
+
+```powershell
+python -m quant_research_micro_lab.walk_forward examples/walk_forward_prices.csv `
+  --short-window 2 --short-window 3 `
+  --long-window 4 --long-window 5 `
+  --train-size 10 --test-size 5 `
+  --transaction-cost-bps 10 --rank-by total_return
+```
+
+The JSON report records dated fold boundaries, the selected parameters and training score, per-fold test metrics, parameter selection counts, and a compounded out-of-sample summary. Training windows advance by `test-size`; only complete test windows are evaluated, and any remaining tail is reported as `unused_trailing_observations`. The selected strategy is run through its training window before the test boundary so lagged signals and transaction costs carry into the first test return without reading future prices.
+
+Walk-forward results reduce one obvious source of in-sample bias but do not eliminate selection bias, regime risk, data quality problems, or trading frictions. Repeatedly changing the grid after seeing test results also contaminates the holdout.
+
 The example uses synthetic prices to show how greater costs reduce the reported net result. This project is educational software, not investment advice. It does not execute trades or make return guarantees; examples should use synthetic or properly licensed data.

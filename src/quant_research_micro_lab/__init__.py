@@ -11,6 +11,7 @@ __all__ = [
     "load_price_csv",
     "maximum_drawdown",
     "sweep_crossover",
+    "walk_forward_crossover",
 ]
 
 
@@ -30,4 +31,8 @@ def __getattr__(name: str) -> Any:
         from .sweep import sweep_crossover
 
         return sweep_crossover
+    if name == "walk_forward_crossover":
+        from .walk_forward import walk_forward_crossover
+
+        return walk_forward_crossover
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
