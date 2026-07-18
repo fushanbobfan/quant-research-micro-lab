@@ -7,6 +7,7 @@ from .backtest import backtest_crossover, maximum_drawdown
 __all__ = [
     "analyze_drawdowns",
     "backtest_crossover",
+    "compare_to_benchmark",
     "load_equity_csv",
     "load_price_csv",
     "maximum_drawdown",
@@ -27,6 +28,10 @@ def __getattr__(name: str) -> Any:
         from .cli import load_price_csv
 
         return load_price_csv
+    if name == "compare_to_benchmark":
+        from .benchmark import compare_to_benchmark
+
+        return compare_to_benchmark
     if name == "sweep_crossover":
         from .sweep import sweep_crossover
 

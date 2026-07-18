@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+import argparse
+import json
 import math
+import sys
 from collections.abc import Sequence
 from numbers import Real
+from pathlib import Path
 from typing import Any
+
+from .cli import load_price_csv
+from .risk import load_equity_csv
 
 
 def _validate_values(name: str, values: Sequence[float]) -> list[float]:
@@ -119,3 +126,49 @@ def compare_to_benchmark(
         )
         / len(active_returns),
     }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("strategy", type=Path)
+    parser.add_argument("benchmark", type=Path)
+    parser.add_argument(
+        "--strategy-column",
+        choices=("equity", "gross_equity"),
+        default="equity",
+    )
+    parser.add_argument("--periods-per-year", type=int, default=252)
+    args = parser.parse_args(argv)
+
+    try:
+        strategy_dates, strategy_equity = load_equity_csv(
+            args.strategy, args.strategy_column
+        )
+        benchmark_dates, benchmark_values = load_price_csv(args.benchmark)
+        if strategy_dates != benchmark_dates:
+            raise ValueError("strategy and benchmark dates must match exactly")
+        result = compare_to_benchmark(
+            strategy_equity,
+            benchmark_values,
+            periods_per_year=args.periods_per_year,
+        )
+    except (OSError, UnicodeError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+    print(
+        json.dumps(
+            {
+                "strategy_column": args.strategy_column,
+                "start_date": strategy_dates[0],
+                "end_date": strategy_dates[-1],
+                **result,
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

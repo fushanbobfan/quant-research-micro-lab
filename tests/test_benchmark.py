@@ -1,7 +1,13 @@
+import contextlib
+import io
+import json
 import math
+import tempfile
 import unittest
+from pathlib import Path
 
-from quant_research_micro_lab.benchmark import compare_to_benchmark
+import quant_research_micro_lab
+from quant_research_micro_lab.benchmark import compare_to_benchmark, main
 
 
 def _curve(returns):
@@ -12,6 +18,12 @@ def _curve(returns):
 
 
 class BenchmarkComparisonTests(unittest.TestCase):
+    def test_benchmark_api_is_available_from_package(self):
+        self.assertIs(
+            quant_research_micro_lab.compare_to_benchmark,
+            compare_to_benchmark,
+        )
+
     def test_reports_relative_performance_and_exposure_metrics(self):
         benchmark_returns = [0.10, -0.05, 0.02]
         strategy_returns = [0.20, -0.10, 0.04]
@@ -75,6 +87,61 @@ class BenchmarkComparisonTests(unittest.TestCase):
                         [1.0, 1.05],
                         periods_per_year=periods,
                     )
+
+    def test_cli_compares_aligned_equity_and_price_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            strategy = Path(directory) / "strategy.csv"
+            benchmark = Path(directory) / "benchmark.csv"
+            strategy.write_text(
+                "date,equity,gross_equity\n"
+                "2026-01-01,1.0,1.0\n"
+                "2026-01-02,1.1,1.2\n"
+                "2026-01-03,1.045,1.08\n",
+                encoding="utf-8",
+            )
+            benchmark.write_text(
+                "date,close\n"
+                "2026-01-01,100\n"
+                "2026-01-02,105\n"
+                "2026-01-03,102.9\n",
+                encoding="utf-8",
+            )
+            stdout = io.StringIO()
+
+            with contextlib.redirect_stdout(stdout):
+                exit_code = main(
+                    [
+                        str(strategy),
+                        str(benchmark),
+                        "--periods-per-year",
+                        "12",
+                    ]
+                )
+
+            report = json.loads(stdout.getvalue())
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(report["start_date"], "2026-01-01")
+            self.assertEqual(report["end_date"], "2026-01-03")
+            self.assertEqual(report["strategy_column"], "equity")
+            self.assertEqual(report["observations"], 3)
+
+    def test_cli_rejects_date_mismatches(self):
+        with tempfile.TemporaryDirectory() as directory:
+            strategy = Path(directory) / "strategy.csv"
+            benchmark = Path(directory) / "benchmark.csv"
+            strategy.write_text(
+                "date,equity,gross_equity\n2026-01-01,1.0,1.0\n2026-01-02,1.1,1.1\n",
+                encoding="utf-8",
+            )
+            benchmark.write_text(
+                "date,close\n2026-01-01,100\n2026-01-03,101\n",
+                encoding="utf-8",
+            )
+
+            with contextlib.redirect_stderr(io.StringIO()):
+                exit_code = main([str(strategy), str(benchmark)])
+
+            self.assertEqual(exit_code, 2)
 
 
 if __name__ == "__main__":
