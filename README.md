@@ -36,6 +36,20 @@ python -m quant_research_micro_lab.risk equity.csv
 
 Use `--column gross_equity` to inspect the pre-cost curve. The deterministic JSON report includes the current drawdown, maximum drawdown episode, longest underwater episode, and every episode in chronological order. Each episode records peak, trough, and optional recovery dates plus the number of underwater observations. Observation counts are intentionally distinct from calendar-day duration so irregular market calendars are not misrepresented.
 
+## Benchmark diagnostics
+
+Compare a backtest equity export with a benchmark `date,close` series on the exact same dates:
+
+```powershell
+python -m quant_research_micro_lab.benchmark `
+  examples/benchmark-strategy.csv examples/benchmark-prices.csv `
+  --periods-per-year 252
+```
+
+The report includes each total return, the strategy growth multiple relative to the benchmark, annualized volatility, tracking error, information ratio, beta, correlation, and the share of periods with positive active return. Use `--strategy-column gross_equity` to inspect the pre-cost curve. Dates must be unique, increasing, and identical across both files so accidental row offsets cannot become performance results.
+
+Volatility, tracking error, covariance, and variance use population moments over the supplied return observations. Information ratio annualizes the arithmetic mean active return; beta, correlation, or information ratio is `null` when its denominator is zero. Benchmark selection and sampling frequency materially affect every diagnostic, and historical comparisons do not imply future performance.
+
 ## Parameter grid evaluation
 
 Evaluate several crossover settings against the same validated price history without writing custom loops. Repeat each window option to define the grid:
