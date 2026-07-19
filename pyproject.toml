@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "quant-research-micro-lab"
-version = "0.7.0"
+version = "0.8.0"
 description = "Inspectable tools for small quantitative research experiments"
 requires-python = ">=3.10"
 license = "MIT"
@@ -14,6 +14,7 @@ quant-backtest = "quant_research_micro_lab.cli:main"
 quant-benchmark = "quant_research_micro_lab.benchmark:main"
 quant-risk = "quant_research_micro_lab.risk:main"
 quant-sweep = "quant_research_micro_lab.sweep:main"
+quant-trades = "quant_research_micro_lab.trades:main"
 quant-walk-forward = "quant_research_micro_lab.walk_forward:main"
 
 [tool.setuptools.packages.find]
