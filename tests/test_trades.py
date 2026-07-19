@@ -1,7 +1,12 @@
+import contextlib
+import io
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
 import quant_research_micro_lab
-from quant_research_micro_lab.trades import build_trade_ledger
+from quant_research_micro_lab.trades import build_trade_ledger, main
 
 
 class TradeLedgerTests(unittest.TestCase):
@@ -104,6 +109,52 @@ class TradeLedgerTests(unittest.TestCase):
                         short_window=2,
                         long_window=3,
                     )
+
+    def test_cli_writes_trade_ledger_json(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "prices.csv"
+            output = Path(directory) / "trades.json"
+            dataset.write_text(
+                "date,close\n"
+                + "\n".join(
+                    f"{day},{price}"
+                    for day, price in zip(
+                        self.dates,
+                        [100, 100, 101, 103, 106, 105, 102, 100],
+                    )
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            exit_code = main(
+                [
+                    str(dataset),
+                    "--short-window",
+                    "2",
+                    "--long-window",
+                    "3",
+                    "--transaction-cost-bps",
+                    "10",
+                    "--output",
+                    str(output),
+                ]
+            )
+
+            self.assertEqual(exit_code, 0)
+            report = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(report["trades"][0]["entry_date"], "2026-01-03")
+            self.assertEqual(report["summary"]["closed_trade_count"], 1)
+
+    def test_cli_returns_two_for_invalid_csv(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "prices.csv"
+            dataset.write_text("wrong,header\n1,2\n", encoding="utf-8")
+
+            with contextlib.redirect_stderr(io.StringIO()):
+                exit_code = main([str(dataset)])
+
+            self.assertEqual(exit_code, 2)
 
 
 if __name__ == "__main__":

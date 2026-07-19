@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import argparse
+import json
 import math
+import sys
 from collections.abc import Sequence
 from datetime import date
 from numbers import Real
+from pathlib import Path
 from typing import Any, cast
 
 from .backtest import _moving_average, backtest_crossover
+from .cli import load_price_csv
 
 
 def _validate_observations(
@@ -168,3 +173,37 @@ def build_trade_ledger(
         },
         "trades": trades,
     }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("dataset", type=Path)
+    parser.add_argument("--short-window", type=int, default=5)
+    parser.add_argument("--long-window", type=int, default=20)
+    parser.add_argument("--transaction-cost-bps", type=float, default=0.0)
+    parser.add_argument("--output", type=Path)
+    args = parser.parse_args(argv)
+
+    try:
+        dates, prices = load_price_csv(args.dataset)
+        report = build_trade_ledger(
+            dates,
+            prices,
+            short_window=args.short_window,
+            long_window=args.long_window,
+            transaction_cost_bps=args.transaction_cost_bps,
+        )
+        rendered = json.dumps(report, indent=2) + "\n"
+        if args.output:
+            args.output.write_text(rendered, encoding="utf-8")
+        else:
+            print(rendered, end="")
+    except (OSError, UnicodeError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
