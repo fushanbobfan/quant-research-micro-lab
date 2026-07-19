@@ -23,6 +23,20 @@ python -m quant_research_micro_lab.cli examples/synthetic_prices.csv `
 
 The JSON report records the observation range and all performance fields. The optional equity export aligns each input date with net and gross equity, which makes downstream checking straightforward. Malformed input and invalid backtest parameters return exit code `2` without writing a result.
 
+## Trade ledger
+
+Turn the same lagged crossover run into a dated, reviewable list of entries and exits:
+
+```powershell
+python -m quant_research_micro_lab.trades examples/synthetic_prices.csv `
+  --short-window 2 --long-window 3 `
+  --transaction-cost-bps 10 --output trades.json
+```
+
+Each closed trade records its execution dates and prices, holding observations, gross return, net return, and compounded cost drag. Open positions are marked to the final observation with a `null` exit and do not assume a future liquidation cost. The summary includes closed-trade win rate and return statistics alongside the full backtest return, cost drag, and turnover, so the ledger can be reconciled with `quant-backtest`.
+
+Signals use the existing one-observation execution lag. An entry cost is included when a position opens, an exit cost is included only when it actually closes, and irregular dates are counted as observations rather than invented calendar durations. The ledger describes a historical rule on supplied data; it does not represent executable orders or expected future returns.
+
 ## Drawdown diagnostics
 
 The `quant-risk` command consumes the equity CSV written by `quant-backtest` and reconstructs each peak-to-trough-to-recovery episode:
