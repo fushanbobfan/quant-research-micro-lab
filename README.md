@@ -50,6 +50,19 @@ python -m quant_research_micro_lab.risk equity.csv
 
 Use `--column gross_equity` to inspect the pre-cost curve. The deterministic JSON report includes the current drawdown, maximum drawdown episode, longest underwater episode, and every episode in chronological order. Each episode records peak, trough, and optional recovery dates plus the number of underwater observations. Observation counts are intentionally distinct from calendar-day duration so irregular market calendars are not misrepresented.
 
+## Empirical return-tail diagnostics
+
+Drawdown describes the path of an equity curve, while a return tail shows the worst individual periods in the supplied sample. The `quant-tail-risk` command reads the same strict equity export and reports the worst and best period returns, loss-period rate, zero-target downside deviation, and a dated lower-tail subset:
+
+```powershell
+python -m quant_research_micro_lab.tail_risk examples/tail-risk-equity.csv `
+  --confidence 0.95
+```
+
+For `n` period returns, confidence `c` selects exactly `ceil((1 - c) * n)` of the lowest returns, with a minimum of one. The report includes that fixed sample count, the least-severe selected return as `tail_cutoff_return`, the mean selected return, and every selected start/end date. Equal returns at the boundary are resolved by their end-date order rather than expanding the tail unpredictably. Use `--column gross_equity` to inspect the pre-cost curve.
+
+Downside deviation is the square root of the mean squared negative return using a zero target and every supplied period; it is not annualized. These are descriptive historical sample statistics, not forecasts, confidence intervals, or claims about future loss probabilities. Small datasets can make a high-confidence tail depend on a single observation.
+
 ## Benchmark diagnostics
 
 Compare a backtest equity export with a benchmark `date,close` series on the exact same dates:
