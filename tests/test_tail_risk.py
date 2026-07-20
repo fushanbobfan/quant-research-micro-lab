@@ -1,7 +1,12 @@
+import contextlib
+import io
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
 import quant_research_micro_lab
-from quant_research_micro_lab.tail_risk import analyze_return_tail
+from quant_research_micro_lab.tail_risk import analyze_return_tail, main
 
 
 class ReturnTailAnalysisTests(unittest.TestCase):
@@ -45,6 +50,38 @@ class ReturnTailAnalysisTests(unittest.TestCase):
             with self.subTest(confidence=confidence):
                 with self.assertRaisesRegex(ValueError, "confidence"):
                     analyze_return_tail([1.0, 1.1], confidence=confidence)
+
+    def test_cli_adds_dates_to_selected_tail_periods(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "equity.csv"
+            dataset.write_text(
+                "date,equity,gross_equity\n"
+                "2026-01-01,1.0,1.0\n"
+                "2026-01-02,0.9,0.95\n"
+                "2026-01-03,1.0,1.05\n"
+                "2026-01-04,0.8,0.9\n",
+                encoding="utf-8",
+            )
+            stdout = io.StringIO()
+
+            with contextlib.redirect_stdout(stdout):
+                exit_code = main([str(dataset), "--confidence", "0.5"])
+
+            report = json.loads(stdout.getvalue())
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(report["column"], "equity")
+            self.assertEqual(report["tail_periods"][0]["start_date"], "2026-01-03")
+            self.assertEqual(report["tail_periods"][0]["end_date"], "2026-01-04")
+
+    def test_cli_returns_two_for_invalid_input(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "equity.csv"
+            dataset.write_text("wrong,header\n", encoding="utf-8")
+
+            with contextlib.redirect_stderr(io.StringIO()):
+                exit_code = main([str(dataset)])
+
+            self.assertEqual(exit_code, 2)
 
 
 if __name__ == "__main__":
