@@ -63,6 +63,19 @@ For `n` period returns, confidence `c` selects exactly `ceil((1 - c) * n)` of th
 
 Downside deviation is the square root of the mean squared negative return using a zero target and every supplied period; it is not annualized. These are descriptive historical sample statistics, not forecasts, confidence intervals, or claims about future loss probabilities. Small datasets can make a high-confidence tail depend on a single observation.
 
+## Rolling performance diagnostics
+
+Aggregate statistics can hide when a strategy's behavior changed. Measure every overlapping fixed-length window in a strict backtest equity export:
+
+```powershell
+python -m quant_research_micro_lab.rolling examples/rolling-equity.csv `
+  --window 3 --periods-per-year 252
+```
+
+`--window` is the number of consecutive returns, so each window contains one additional equity observation. Every dated window reports total and annualized return, annualized volatility, zero-rate Sharpe ratio, zero-target downside deviation, maximum drawdown, positive-return rate, and its worst individual return. The summary identifies the latest window plus the earliest worst-return, worst-drawdown, and highest-volatility windows under deterministic ties. Use `--output` to save the JSON report or `--column gross_equity` to inspect the pre-cost curve.
+
+Overlapping windows are strongly dependent observations, and annualization assumes the supplied periods have a stable frequency matching `--periods-per-year`. A zero-volatility window reports Sharpe as `null` rather than inventing a ratio. These diagnostics describe the supplied curve and do not estimate trading capacity, future returns, or loss probabilities.
+
 ## Benchmark diagnostics
 
 Compare a backtest equity export with a benchmark `date,close` series on the exact same dates:
