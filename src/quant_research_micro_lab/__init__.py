@@ -7,6 +7,7 @@ from .backtest import backtest_crossover, maximum_drawdown
 __all__ = [
     "analyze_drawdowns",
     "analyze_return_tail",
+    "analyze_rolling_performance",
     "backtest_crossover",
     "build_trade_ledger",
     "compare_to_benchmark",
@@ -30,6 +31,10 @@ def __getattr__(name: str) -> Any:
         from .tail_risk import analyze_return_tail
 
         return analyze_return_tail
+    if name == "analyze_rolling_performance":
+        from .rolling import analyze_rolling_performance
+
+        return analyze_rolling_performance
     if name == "build_trade_ledger":
         from .trades import build_trade_ledger
 
