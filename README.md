@@ -76,6 +76,20 @@ python -m quant_research_micro_lab.rolling examples/rolling-equity.csv `
 
 Overlapping windows are strongly dependent observations, and annualization assumes the supplied periods have a stable frequency matching `--periods-per-year`. A zero-volatility window reports Sharpe as `null` rather than inventing a ratio. These diagnostics describe the supplied curve and do not estimate trading capacity, future returns, or loss probabilities.
 
+## Moving-block bootstrap diagnostics
+
+Resample contiguous return blocks to see how path-dependent metrics vary under alternative orderings of the supplied historical returns:
+
+```powershell
+python -m quant_research_micro_lab.bootstrap examples/bootstrap-equity.csv `
+  --block-size 3 --samples 2000 --confidence 0.95 `
+  --seed 7 --periods-per-year 252
+```
+
+Each bootstrap path contains the same number of returns as the input. Blocks are drawn with replacement from every valid overlapping start and the final block is truncated to the required path length. The deterministic report includes the observed and bootstrap-mean total return, annualized volatility, and maximum drawdown; linearly interpolated percentile intervals; and the share of sampled paths with a negative total return. Use `--column gross_equity` for the pre-cost curve or `--output` to write JSON.
+
+A block preserves dependence only within its selected span, while drawing blocks assumes that historical return behavior is sufficiently stable to recombine. Results can change materially with block size, sample period, seed, and the input strategy. These intervals summarize a resampling procedure on one observed curve; they are not forecast intervals, trading recommendations, or guarantees about future returns or losses.
+
 ## Benchmark diagnostics
 
 Compare a backtest equity export with a benchmark `date,close` series on the exact same dates:
