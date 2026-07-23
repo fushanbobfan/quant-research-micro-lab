@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import argparse
+import json
 import math
 import random
+import sys
 from collections.abc import Sequence
 from numbers import Real
+from pathlib import Path
 from typing import Any
 
 from .backtest import maximum_drawdown
+from .risk import load_equity_csv
 
 
 def _annualized_volatility(returns: Sequence[float], periods_per_year: int) -> float:
@@ -144,3 +149,52 @@ def bootstrap_equity_performance(
         )
         / samples,
     }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("dataset", type=Path)
+    parser.add_argument("--block-size", type=int, default=5)
+    parser.add_argument("--samples", type=int, default=2_000)
+    parser.add_argument("--confidence", type=float, default=0.95)
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--periods-per-year", type=int, default=252)
+    parser.add_argument(
+        "--column",
+        choices=("equity", "gross_equity"),
+        default="equity",
+        help="curve to resample from a quant-backtest equity export",
+    )
+    parser.add_argument("--output", type=Path)
+    args = parser.parse_args(argv)
+
+    try:
+        dates, equity = load_equity_csv(args.dataset, args.column)
+        report = bootstrap_equity_performance(
+            equity,
+            block_size=args.block_size,
+            samples=args.samples,
+            confidence=args.confidence,
+            seed=args.seed,
+            periods_per_year=args.periods_per_year,
+        )
+        report = {
+            **report,
+            "column": args.column,
+            "start_date": dates[0],
+            "end_date": dates[-1],
+        }
+        rendered = json.dumps(report, indent=2) + "\n"
+        if args.output:
+            args.output.write_text(rendered, encoding="utf-8")
+        else:
+            print(rendered, end="")
+    except (OSError, UnicodeError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

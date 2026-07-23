@@ -12,6 +12,7 @@ license = "MIT"
 [project.scripts]
 quant-backtest = "quant_research_micro_lab.cli:main"
 quant-benchmark = "quant_research_micro_lab.benchmark:main"
+quant-bootstrap = "quant_research_micro_lab.bootstrap:main"
 quant-risk = "quant_research_micro_lab.risk:main"
 quant-rolling = "quant_research_micro_lab.rolling:main"
 quant-sweep = "quant_research_micro_lab.sweep:main"

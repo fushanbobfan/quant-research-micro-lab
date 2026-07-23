@@ -1,7 +1,12 @@
+import contextlib
+import io
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
 import quant_research_micro_lab
-from quant_research_micro_lab.bootstrap import bootstrap_equity_performance
+from quant_research_micro_lab.bootstrap import bootstrap_equity_performance, main
 
 
 class BootstrapPerformanceTests(unittest.TestCase):
@@ -78,6 +83,60 @@ class BootstrapPerformanceTests(unittest.TestCase):
             with self.subTest(equity=equity, kwargs=kwargs):
                 with self.assertRaisesRegex(ValueError, message):
                     bootstrap_equity_performance(equity, **kwargs)
+
+    def test_cli_adds_dates_and_writes_a_reproducible_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "equity.csv"
+            output = Path(directory) / "bootstrap.json"
+            dataset.write_text(
+                "date,equity,gross_equity\n"
+                "2026-01-01,100,100\n"
+                "2026-01-02,110,111\n"
+                "2026-01-03,99,100\n"
+                "2026-01-04,108.9,110\n",
+                encoding="utf-8",
+            )
+
+            exit_code = main(
+                [
+                    str(dataset),
+                    "--block-size",
+                    "2",
+                    "--samples",
+                    "20",
+                    "--confidence",
+                    "0.8",
+                    "--seed",
+                    "4",
+                    "--periods-per-year",
+                    "3",
+                    "--output",
+                    str(output),
+                ]
+            )
+
+            report = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(report["start_date"], "2026-01-01")
+            self.assertEqual(report["end_date"], "2026-01-04")
+            self.assertEqual(report["column"], "equity")
+            self.assertEqual(report["samples"], 20)
+            self.assertEqual(report["block_size"], 2)
+
+    def test_cli_returns_two_for_an_invalid_block_size(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "equity.csv"
+            dataset.write_text(
+                "date,equity,gross_equity\n"
+                "2026-01-01,100,100\n"
+                "2026-01-02,101,101\n",
+                encoding="utf-8",
+            )
+
+            with contextlib.redirect_stderr(io.StringIO()):
+                exit_code = main([str(dataset), "--block-size", "2"])
+
+            self.assertEqual(exit_code, 2)
 
 
 if __name__ == "__main__":
