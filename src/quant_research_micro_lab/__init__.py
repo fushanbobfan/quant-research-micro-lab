@@ -8,11 +8,13 @@ __all__ = [
     "analyze_drawdowns",
     "analyze_return_tail",
     "analyze_rolling_performance",
+    "audit_portfolio_exposure",
     "backtest_crossover",
     "bootstrap_equity_performance",
     "build_trade_ledger",
     "compare_to_benchmark",
     "load_equity_csv",
+    "load_portfolio_csv",
     "load_price_csv",
     "maximum_drawdown",
     "sweep_crossover",
@@ -21,6 +23,13 @@ __all__ = [
 
 
 def __getattr__(name: str) -> Any:
+    if name in {"audit_portfolio_exposure", "load_portfolio_csv"}:
+        from .exposure import audit_portfolio_exposure, load_portfolio_csv
+
+        return {
+            "audit_portfolio_exposure": audit_portfolio_exposure,
+            "load_portfolio_csv": load_portfolio_csv,
+        }[name]
     if name == "bootstrap_equity_performance":
         from .bootstrap import bootstrap_equity_performance
 
