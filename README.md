@@ -23,6 +23,22 @@ python -m quant_research_micro_lab.cli examples/synthetic_prices.csv `
 
 The JSON report records the observation range and all performance fields. The optional equity export aligns each input date with net and gross equity, which makes downstream checking straightforward. Malformed input and invalid backtest parameters return exit code `2` without writing a result.
 
+## Portfolio exposure audit
+
+Inspect synthetic or research portfolio weights without placing orders:
+
+```powershell
+python -m quant_research_micro_lab.exposure examples/portfolio-weights.csv `
+  --max-gross-exposure 1.00 --max-abs-net-exposure 1.00 `
+  --max-single-position 0.55 --max-concentration-hhi 0.42
+```
+
+The input header must be exactly `date,asset,weight`. Dates use `YYYY-MM-DD`, appear in non-decreasing order, and may contain several unique assets per snapshot. Weights are finite signed decimals; positive values are long, negative values are short, and an all-zero snapshot is rejected.
+
+Each dated snapshot reports long, short, gross, net, and absolute net exposure; the largest absolute position; normalized absolute-weight HHI; its reciprocal effective-position count; and one-way turnover from the prior snapshot. Turnover is `0.5 * sum(abs(current_weight - previous_weight))` over the union of assets, so additions and removals remain visible. The first snapshot has no prior turnover. Summary fields preserve dated extrema and average diagnostics, while optional maximums produce stable, structured failures.
+
+Exit code `0` means every configured exposure and concentration limit passed, `1` means valid weights exceeded at least one limit, and `2` identifies invalid CSV, duplicate positions, zero-exposure snapshots, or invalid configuration. This is a weight-file audit, not a portfolio optimizer or execution system. It does not model prices, liquidity, correlation, currency, borrow, margin, transaction costs, or future returns, so passing limits is not evidence that a portfolio is safe or profitable.
+
 ## Trade ledger
 
 Turn the same lagged crossover run into a dated, reviewable list of entries and exits:
