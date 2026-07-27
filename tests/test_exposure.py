@@ -1,6 +1,16 @@
+import contextlib
+import io
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
-from quant_research_micro_lab.exposure import audit_portfolio_exposure
+import quant_research_micro_lab
+from quant_research_micro_lab.exposure import (
+    audit_portfolio_exposure,
+    load_portfolio_csv,
+    main,
+)
 
 
 class PortfolioExposureTests(unittest.TestCase):
@@ -19,6 +29,14 @@ class PortfolioExposureTests(unittest.TestCase):
     def test_reports_dated_exposure_concentration_and_turnover(self):
         report = audit_portfolio_exposure(self.records)
 
+        self.assertIs(
+            quant_research_micro_lab.audit_portfolio_exposure,
+            audit_portfolio_exposure,
+        )
+        self.assertIs(
+            quant_research_micro_lab.load_portfolio_csv,
+            load_portfolio_csv,
+        )
         self.assertTrue(report["passed"])
         self.assertEqual(report["snapshot_count"], 3)
         self.assertEqual(report["asset_count"], 3)
@@ -161,6 +179,106 @@ class PortfolioExposureTests(unittest.TestCase):
                 self.records,
                 max_concentration_hhi=1.1,
             )
+
+    def test_loads_strict_portfolio_csv(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "weights.csv"
+            dataset.write_text(
+                "date,asset,weight\n"
+                "2026-01-01,AAA,0.6\n"
+                "2026-01-01,BBB,0.4\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                load_portfolio_csv(dataset),
+                [
+                    {"date": "2026-01-01", "asset": "AAA", "weight": 0.6},
+                    {"date": "2026-01-01", "asset": "BBB", "weight": 0.4},
+                ],
+            )
+
+    def test_loader_rejects_bad_headers_empty_rows_and_weights(self):
+        cases = [
+            ("wrong,header\n", "header"),
+            ("date,asset,weight\n", "at least one"),
+            ("date,asset,weight\n2026-01-01,AAA\n", "three fields"),
+            ("date,asset,weight\n2026-01-01,AAA,1,extra\n", "three fields"),
+            ("date,asset,weight\n2026-01-01,AAA,nope\n", "weight"),
+        ]
+        for contents, message in cases:
+            with self.subTest(message=message):
+                with tempfile.TemporaryDirectory() as directory:
+                    dataset = Path(directory) / "weights.csv"
+                    dataset.write_text(contents, encoding="utf-8")
+                    with self.assertRaisesRegex(ValueError, message):
+                        load_portfolio_csv(dataset)
+
+    def test_cli_returns_zero_for_a_passing_audit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "weights.csv"
+            dataset.write_text(
+                "date,asset,weight\n"
+                "2026-01-01,AAA,0.6\n"
+                "2026-01-01,BBB,0.4\n",
+                encoding="utf-8",
+            )
+            stdout = io.StringIO()
+
+            with contextlib.redirect_stdout(stdout):
+                exit_code = main(
+                    [
+                        str(dataset),
+                        "--max-gross-exposure",
+                        "1",
+                        "--max-single-position",
+                        "0.6",
+                        "--max-concentration-hhi",
+                        "0.52",
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(json.loads(stdout.getvalue())["passed"])
+
+    def test_cli_returns_one_with_structured_failures(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "weights.csv"
+            dataset.write_text(
+                "date,asset,weight\n"
+                "2026-01-01,AAA,0.8\n"
+                "2026-01-01,BBB,0.2\n",
+                encoding="utf-8",
+            )
+            stdout = io.StringIO()
+
+            with contextlib.redirect_stdout(stdout):
+                exit_code = main(
+                    [
+                        str(dataset),
+                        "--max-single-position",
+                        "0.6",
+                        "--max-concentration-hhi",
+                        "0.6",
+                    ]
+                )
+
+            report = json.loads(stdout.getvalue())
+            self.assertEqual(exit_code, 1)
+            self.assertEqual(
+                [failure["metric"] for failure in report["failures"]],
+                ["single_position", "concentration_hhi"],
+            )
+
+    def test_cli_returns_two_for_invalid_input(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "weights.csv"
+            dataset.write_text("wrong,header\n", encoding="utf-8")
+
+            with contextlib.redirect_stderr(io.StringIO()):
+                exit_code = main([str(dataset)])
+
+            self.assertEqual(exit_code, 2)
 
 
 if __name__ == "__main__":

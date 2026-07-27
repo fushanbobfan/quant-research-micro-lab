@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import argparse
+import csv
+import json
 import math
+import sys
 from collections.abc import Mapping, Sequence
 from datetime import date
 from numbers import Real
+from pathlib import Path
 from typing import Any
 
 
@@ -282,3 +287,59 @@ def audit_portfolio_exposure(
         "failures": failures,
         "snapshots": snapshots,
     }
+
+
+def load_portfolio_csv(path: Path) -> list[dict[str, Any]]:
+    """Load the strict date,asset,weight position format."""
+
+    records = []
+    with path.open(newline="", encoding="utf-8-sig") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames != ["date", "asset", "weight"]:
+            raise ValueError("CSV header must be exactly: date,asset,weight")
+        for row_number, row in enumerate(reader, start=2):
+            if None in row or any(value is None for value in row.values()):
+                raise ValueError(f"row {row_number} must contain exactly three fields")
+            try:
+                weight = float(row.get("weight") or "")
+            except ValueError as error:
+                raise ValueError(f"row {row_number} has an invalid weight") from error
+            records.append(
+                {
+                    "date": row.get("date"),
+                    "asset": row.get("asset"),
+                    "weight": weight,
+                }
+            )
+    if not records:
+        raise ValueError("CSV must contain at least one position row")
+    return records
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("dataset", type=Path)
+    parser.add_argument("--max-gross-exposure", type=float)
+    parser.add_argument("--max-abs-net-exposure", type=float)
+    parser.add_argument("--max-single-position", type=float)
+    parser.add_argument("--max-concentration-hhi", type=float)
+    args = parser.parse_args(argv)
+
+    try:
+        report = audit_portfolio_exposure(
+            load_portfolio_csv(args.dataset),
+            max_gross_exposure=args.max_gross_exposure,
+            max_abs_net_exposure=args.max_abs_net_exposure,
+            max_single_position=args.max_single_position,
+            max_concentration_hhi=args.max_concentration_hhi,
+        )
+    except (OSError, UnicodeError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+    print(json.dumps(report, indent=2))
+    return int(not report["passed"])
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
