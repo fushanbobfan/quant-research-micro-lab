@@ -13,6 +13,7 @@ __all__ = [
     "bootstrap_equity_performance",
     "build_trade_ledger",
     "compare_to_benchmark",
+    "evaluate_portfolio_stress",
     "load_equity_csv",
     "load_portfolio_csv",
     "load_price_csv",
@@ -61,6 +62,10 @@ def __getattr__(name: str) -> Any:
         from .benchmark import compare_to_benchmark
 
         return compare_to_benchmark
+    if name == "evaluate_portfolio_stress":
+        from .stress import evaluate_portfolio_stress
+
+        return evaluate_portfolio_stress
     if name == "sweep_crossover":
         from .sweep import sweep_crossover
 
