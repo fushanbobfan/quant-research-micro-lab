@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import argparse
+import csv
+import json
 import math
+import sys
 from collections.abc import Mapping, Sequence
 from numbers import Real
+from pathlib import Path
 from typing import Any
 
-from .exposure import _validate_records
+from .exposure import _validate_records, load_portfolio_csv
 
 
 def _validate_scenarios(
@@ -196,3 +201,62 @@ def evaluate_portfolio_stress(
         "failures": failures,
         "scenarios": scenario_reports,
     }
+
+
+def load_scenario_csv(path: Path) -> list[dict[str, Any]]:
+    """Load the strict scenario,asset,return stress format."""
+
+    records = []
+    with path.open(newline="", encoding="utf-8-sig") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames != ["scenario", "asset", "return"]:
+            raise ValueError("CSV header must be exactly: scenario,asset,return")
+        for row_number, row in enumerate(reader, start=2):
+            if None in row or any(value is None for value in row.values()):
+                raise ValueError(f"row {row_number} must contain exactly three fields")
+            try:
+                asset_return = float(row.get("return") or "")
+            except ValueError as error:
+                raise ValueError(f"row {row_number} has an invalid return") from error
+            records.append(
+                {
+                    "scenario": row.get("scenario"),
+                    "asset": row.get("asset"),
+                    "return": asset_return,
+                }
+            )
+    if not records:
+        raise ValueError("CSV must contain at least one scenario row")
+    return records
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("portfolio", type=Path)
+    parser.add_argument("scenarios", type=Path)
+    parser.add_argument("--date")
+    parser.add_argument("--max-loss", type=float)
+    parser.add_argument("--output", type=Path)
+    args = parser.parse_args(argv)
+
+    try:
+        report = evaluate_portfolio_stress(
+            load_portfolio_csv(args.portfolio),
+            load_scenario_csv(args.scenarios),
+            snapshot_date=args.date,
+            max_loss=args.max_loss,
+        )
+        rendered = json.dumps(report, indent=2) + "\n"
+        if args.output is None:
+            print(rendered, end="")
+        else:
+            args.output.write_text(rendered, encoding="utf-8")
+    except (OSError, UnicodeError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+    return int(not report["passed"])
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

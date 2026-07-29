@@ -1,7 +1,16 @@
+import contextlib
+import io
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
 import quant_research_micro_lab
-from quant_research_micro_lab.stress import evaluate_portfolio_stress
+from quant_research_micro_lab.stress import (
+    evaluate_portfolio_stress,
+    load_scenario_csv,
+    main,
+)
 
 
 class PortfolioStressTests(unittest.TestCase):
@@ -125,6 +134,100 @@ class PortfolioStressTests(unittest.TestCase):
                         self.scenarios,
                         max_loss=max_loss,
                     )
+
+    def test_loads_strict_scenario_csv(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "scenarios.csv"
+            dataset.write_text(
+                "scenario,asset,return\n"
+                "down,AAA,-0.1\n"
+                "down,BBB,0.2\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                load_scenario_csv(dataset),
+                [
+                    {"scenario": "down", "asset": "AAA", "return": -0.1},
+                    {"scenario": "down", "asset": "BBB", "return": 0.2},
+                ],
+            )
+
+    def test_cli_returns_one_and_writes_a_failed_gate_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            portfolio = root / "portfolio.csv"
+            scenarios = root / "scenarios.csv"
+            output = root / "report.json"
+            portfolio.write_text(
+                "date,asset,weight\n"
+                "2026-01-01,AAA,0.6\n"
+                "2026-01-01,BBB,0.4\n",
+                encoding="utf-8",
+            )
+            scenarios.write_text(
+                "scenario,asset,return\n"
+                "down,AAA,-0.2\n"
+                "down,BBB,-0.1\n",
+                encoding="utf-8",
+            )
+
+            exit_code = main(
+                [
+                    str(portfolio),
+                    str(scenarios),
+                    "--max-loss",
+                    "0.1",
+                    "--output",
+                    str(output),
+                ]
+            )
+
+            report = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(exit_code, 1)
+            self.assertFalse(report["passed"])
+            self.assertAlmostEqual(report["failures"][0]["actual"], 0.16)
+
+    def test_cli_prints_a_passing_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            portfolio = root / "portfolio.csv"
+            scenarios = root / "scenarios.csv"
+            portfolio.write_text(
+                "date,asset,weight\n"
+                "2026-01-01,AAA,0.6\n"
+                "2026-01-01,BBB,0.4\n",
+                encoding="utf-8",
+            )
+            scenarios.write_text(
+                "scenario,asset,return\n"
+                "up,AAA,0.1\n"
+                "up,BBB,0.2\n",
+                encoding="utf-8",
+            )
+            stdout = io.StringIO()
+
+            with contextlib.redirect_stdout(stdout):
+                exit_code = main([str(portfolio), str(scenarios)])
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(json.loads(stdout.getvalue())["passed"])
+
+    def test_cli_returns_two_for_invalid_csv(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            portfolio = root / "portfolio.csv"
+            scenarios = root / "scenarios.csv"
+            portfolio.write_text(
+                "date,asset,weight\n2026-01-01,AAA,1\n",
+                encoding="utf-8",
+            )
+            scenarios.write_text("wrong,header\n", encoding="utf-8")
+
+            with contextlib.redirect_stderr(io.StringIO()):
+                exit_code = main([str(portfolio), str(scenarios)])
+
+            self.assertEqual(exit_code, 2)
 
 
 if __name__ == "__main__":
