@@ -153,6 +153,22 @@ class PortfolioStressTests(unittest.TestCase):
                 ],
             )
 
+    def test_scenario_loader_rejects_bad_shapes_and_values(self):
+        cases = [
+            ("wrong,header\n", "header"),
+            ("scenario,asset,return\n", "at least one"),
+            ("scenario,asset,return\ndown,AAA\n", "three fields"),
+            ("scenario,asset,return\ndown,AAA,0.1,extra\n", "three fields"),
+            ("scenario,asset,return\ndown,AAA,nope\n", "return"),
+        ]
+        for contents, message in cases:
+            with self.subTest(message=message):
+                with tempfile.TemporaryDirectory() as directory:
+                    dataset = Path(directory) / "scenarios.csv"
+                    dataset.write_text(contents, encoding="utf-8")
+                    with self.assertRaisesRegex(ValueError, message):
+                        load_scenario_csv(dataset)
+
     def test_cli_returns_one_and_writes_a_failed_gate_report(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -228,6 +244,38 @@ class PortfolioStressTests(unittest.TestCase):
                 exit_code = main([str(portfolio), str(scenarios)])
 
             self.assertEqual(exit_code, 2)
+
+    def test_cli_refuses_to_overwrite_either_source_csv(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            portfolio = root / "portfolio.csv"
+            scenarios = root / "scenarios.csv"
+            portfolio_contents = "date,asset,weight\n2026-01-01,AAA,1\n"
+            scenario_contents = "scenario,asset,return\nup,AAA,0.1\n"
+            portfolio.write_text(portfolio_contents, encoding="utf-8")
+            scenarios.write_text(scenario_contents, encoding="utf-8")
+
+            for output in (portfolio, scenarios):
+                with self.subTest(output=output.name):
+                    with contextlib.redirect_stderr(io.StringIO()):
+                        exit_code = main(
+                            [
+                                str(portfolio),
+                                str(scenarios),
+                                "--output",
+                                str(output),
+                            ]
+                        )
+                    self.assertEqual(exit_code, 2)
+
+            self.assertEqual(
+                portfolio.read_text(encoding="utf-8"),
+                portfolio_contents,
+            )
+            self.assertEqual(
+                scenarios.read_text(encoding="utf-8"),
+                scenario_contents,
+            )
 
 
 if __name__ == "__main__":

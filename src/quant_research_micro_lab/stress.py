@@ -137,7 +137,10 @@ def evaluate_portfolio_stress(
                     else None
                 ),
                 "largest_positive_contributor": (
-                    max(positive, key=lambda item: (item["contribution"], item["asset"]))
+                    min(
+                        positive,
+                        key=lambda item: (-item["contribution"], item["asset"]),
+                    )
                     if positive
                     else None
                 ),
@@ -149,9 +152,9 @@ def evaluate_portfolio_stress(
         scenario_reports,
         key=lambda item: (item["portfolio_return"], item["scenario"]),
     )
-    best = max(
+    best = min(
         scenario_reports,
-        key=lambda item: (item["portfolio_return"], item["scenario"]),
+        key=lambda item: (-item["portfolio_return"], item["scenario"]),
     )
     failures = []
     if max_loss is not None:
@@ -230,6 +233,15 @@ def load_scenario_csv(path: Path) -> list[dict[str, Any]]:
     return records
 
 
+def _paths_alias(source: Path, output: Path) -> bool:
+    if source.resolve() == output.resolve():
+        return True
+    try:
+        return source.samefile(output)
+    except (FileNotFoundError, OSError):
+        return False
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("portfolio", type=Path)
@@ -240,6 +252,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
+        if args.output is not None and (
+            _paths_alias(args.portfolio, args.output)
+            or _paths_alias(args.scenarios, args.output)
+        ):
+            raise ValueError("output must not alias either source CSV")
         report = evaluate_portfolio_stress(
             load_portfolio_csv(args.portfolio),
             load_scenario_csv(args.scenarios),
