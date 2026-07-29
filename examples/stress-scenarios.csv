@@ -1,0 +1,13 @@
+scenario,asset,return
+broad_downturn,ALPHA,-0.18
+broad_downturn,BETA,-0.12
+broad_downturn,GAMMA,-0.08
+broad_downturn,DELTA,-0.10
+factor_rotation,ALPHA,-0.05
+factor_rotation,BETA,0.15
+factor_rotation,GAMMA,0.08
+factor_rotation,DELTA,0.02
+short_squeeze,ALPHA,0.02
+short_squeeze,BETA,0.30
+short_squeeze,GAMMA,0.01
+short_squeeze,DELTA,0.05

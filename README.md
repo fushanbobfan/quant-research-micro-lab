@@ -39,6 +39,22 @@ Each dated snapshot reports long, short, gross, net, and absolute net exposure; 
 
 Exit code `0` means every configured exposure and concentration limit passed, `1` means valid weights exceeded at least one limit, and `2` identifies invalid CSV, duplicate positions, zero-exposure snapshots, or invalid configuration. This is a weight-file audit, not a portfolio optimizer or execution system. It does not model prices, liquidity, correlation, currency, borrow, margin, transaction costs, or future returns, so passing limits is not evidence that a portfolio is safe or profitable.
 
+## Portfolio stress scenarios
+
+Apply explicit synthetic asset-return shocks to one dated portfolio snapshot without placing orders or estimating future returns:
+
+```powershell
+python -m quant_research_micro_lab.stress `
+  examples/portfolio-weights.csv examples/stress-scenarios.csv `
+  --max-loss 0.10
+```
+
+The portfolio input reuses the strict `date,asset,weight` format from `quant-exposure`. The scenario header must be exactly `scenario,asset,return`, with one unique row for every nonzero portfolio asset in each scenario. Simple asset returns must be finite and cannot be below `-1`. The latest portfolio date is selected by default; use `--date YYYY-MM-DD` to audit another available snapshot.
+
+Each scenario reports portfolio return as `sum(weight * asset return)`, long- and short-side contributions, weighted absolute shock, per-asset contributions, and the largest positive and negative contributors. The summary identifies the best and worst supplied scenarios. `--max-loss` returns exit code `1` with a stable failure for every scenario whose negative portfolio return exceeds the limit; malformed or incomplete inputs return `2`. Output files cannot alias either source CSV.
+
+These are instantaneous linear shocks to static weights. The audit does not model nonlinear instruments, changing exposures, liquidity, price impact, correlation dynamics, currency, financing, margin, taxes, or the probability of a scenario. A passing synthetic scenario set is not evidence that a portfolio is safe, profitable, or robust to untested events.
+
 ## Trade ledger
 
 Turn the same lagged crossover run into a dated, reviewable list of entries and exits:
