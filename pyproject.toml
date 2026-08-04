@@ -20,6 +20,7 @@ quant-sweep = "quant_research_micro_lab.sweep:main"
 quant-stress = "quant_research_micro_lab.stress:main"
 quant-tail-risk = "quant_research_micro_lab.tail_risk:main"
 quant-trades = "quant_research_micro_lab.trades:main"
+quant-var-backtest = "quant_research_micro_lab.var_backtest:main"
 quant-walk-forward = "quant_research_micro_lab.walk_forward:main"
 
 [tool.setuptools.packages.find]

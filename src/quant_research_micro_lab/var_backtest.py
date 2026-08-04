@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import argparse
+import csv
+import json
 import math
+import sys
 from collections.abc import Mapping, Sequence
 from datetime import date
 from numbers import Real
+from pathlib import Path
 from typing import Any
 
 
@@ -233,3 +238,80 @@ def backtest_var_forecasts(
         "details_truncated": exception_count > len(exceptions),
         "settings": {"max_details": max_details},
     }
+
+
+def load_var_csv(path: Path) -> list[dict[str, Any]]:
+    """Load the strict date,realized_return,var forecast format."""
+
+    records = []
+    with path.open(newline="", encoding="utf-8-sig") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames != ["date", "realized_return", "var"]:
+            raise ValueError("CSV header must be exactly: date,realized_return,var")
+        for row_number, row in enumerate(reader, start=2):
+            if None in row or any(value is None for value in row.values()):
+                raise ValueError(f"row {row_number} must contain exactly three fields")
+            try:
+                realized_return = float(row.get("realized_return") or "")
+                var = float(row.get("var") or "")
+            except ValueError as error:
+                raise ValueError(
+                    f"row {row_number} has an invalid realized_return or var"
+                ) from error
+            records.append(
+                {
+                    "date": row.get("date"),
+                    "realized_return": realized_return,
+                    "var": var,
+                }
+            )
+    if not records:
+        raise ValueError("CSV must contain at least one forecast row")
+    return records
+
+
+def _paths_alias(source: Path, output: Path) -> bool:
+    if source.resolve() == output.resolve():
+        return True
+    try:
+        return source.samefile(output)
+    except (FileNotFoundError, OSError):
+        return False
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("dataset", type=Path)
+    parser.add_argument("--confidence", type=float, default=0.99)
+    parser.add_argument("--max-exception-rate", type=float)
+    parser.add_argument("--min-kupiec-p-value", type=float)
+    parser.add_argument("--max-exception-count", type=int)
+    parser.add_argument("--max-details", type=int, default=20)
+    parser.add_argument("--output", type=Path)
+    args = parser.parse_args(argv)
+
+    try:
+        if args.output is not None and _paths_alias(args.dataset, args.output):
+            raise ValueError("output must not alias the source CSV")
+        report = backtest_var_forecasts(
+            load_var_csv(args.dataset),
+            confidence=args.confidence,
+            max_exception_rate=args.max_exception_rate,
+            min_kupiec_p_value=args.min_kupiec_p_value,
+            max_exception_count=args.max_exception_count,
+            max_details=args.max_details,
+        )
+        rendered = json.dumps(report, indent=2) + "\n"
+        if args.output is None:
+            print(rendered, end="")
+        else:
+            args.output.write_text(rendered, encoding="utf-8")
+    except (OSError, UnicodeError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+    return int(not report["passed"])
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

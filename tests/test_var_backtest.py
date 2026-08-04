@@ -1,7 +1,17 @@
+import contextlib
+import io
+import json
 import math
+import tempfile
 import unittest
+from pathlib import Path
 
-from quant_research_micro_lab.var_backtest import backtest_var_forecasts
+import quant_research_micro_lab
+from quant_research_micro_lab.var_backtest import (
+    backtest_var_forecasts,
+    load_var_csv,
+    main,
+)
 
 
 class VarBacktestTests(unittest.TestCase):
@@ -24,6 +34,10 @@ class VarBacktestTests(unittest.TestCase):
         )
 
         metrics = report["metrics"]
+        self.assertIs(
+            quant_research_micro_lab.backtest_var_forecasts,
+            backtest_var_forecasts,
+        )
         self.assertEqual(metrics["observations"], 10)
         self.assertEqual(metrics["exception_count"], 2)
         self.assertAlmostEqual(metrics["exception_rate"], 0.2)
@@ -85,6 +99,65 @@ class VarBacktestTests(unittest.TestCase):
             with self.subTest(confidence=confidence):
                 with self.assertRaisesRegex(ValueError, "confidence"):
                     backtest_var_forecasts(self.records, confidence=confidence)
+
+    def test_strict_csv_loader_and_cli_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "var.csv"
+            output = Path(directory) / "report.json"
+            dataset.write_text(
+                "date,realized_return,var\n"
+                "2026-01-01,-0.06,0.05\n"
+                "2026-01-02,0.01,0.05\n"
+                "2026-01-03,-0.03,0.05\n"
+                "2026-01-04,0.02,0.05\n"
+                "2026-01-05,0.00,0.05\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(len(load_var_csv(dataset)), 5)
+            exit_code = main(
+                [
+                    str(dataset),
+                    "--confidence",
+                    "0.8",
+                    "--max-exception-rate",
+                    "0.1",
+                    "--output",
+                    str(output),
+                ]
+            )
+
+            self.assertEqual(exit_code, 1)
+            report = json.loads(output.read_text(encoding="utf-8"))
+            self.assertFalse(report["passed"])
+            self.assertEqual(report["metrics"]["exception_count"], 1)
+
+    def test_cli_passes_and_rejects_bad_csv_or_output_alias(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "var.csv"
+            dataset.write_text(
+                "date,realized_return,var\n"
+                "2026-01-01,0.01,0.05\n",
+                encoding="utf-8",
+            )
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(
+                    main([str(dataset), "--max-exception-count", "0"]),
+                    0,
+                )
+
+            original = dataset.read_text(encoding="utf-8")
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(
+                    main([str(dataset), "--output", str(dataset)]),
+                    2,
+                )
+            self.assertEqual(dataset.read_text(encoding="utf-8"), original)
+
+            dataset.write_text("wrong,header\n", encoding="utf-8")
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(main([str(dataset)]), 2)
 
 
 if __name__ == "__main__":
