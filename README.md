@@ -95,6 +95,20 @@ For `n` period returns, confidence `c` selects exactly `ceil((1 - c) * n)` of th
 
 Downside deviation is the square root of the mean squared negative return using a zero target and every supplied period; it is not annualized. These are descriptive historical sample statistics, not forecasts, confidence intervals, or claims about future loss probabilities. Small datasets can make a high-confidence tail depend on a single observation.
 
+## VaR forecast backtesting
+
+A historical tail describes realized data; a VaR backtest asks whether previously produced one-period loss thresholds had the advertised unconditional exception rate. Supply a strictly increasing CSV with `date,realized_return,var`, where `var` is a non-negative fractional loss magnitude and an exception occurs only when `-realized_return > var`:
+
+```powershell
+python -m quant_research_micro_lab.var_backtest examples/var-forecasts.csv `
+  --confidence 0.80 --max-exception-rate 0.25 `
+  --min-kupiec-p-value 0.05 --max-exception-count 2
+```
+
+The report includes observed and expected exception rates and counts, mean and maximum exception loss and threshold shortfall, the longest exception streak, adjacent exception pairs, and the Kupiec likelihood-ratio unconditional-coverage test. Exception details are date-bounded with `--max-details`; `--output` writes JSON without allowing the source CSV to be overwritten. Exit code `0` means all configured gates passed, `1` reports coverage or count failures, and `2` identifies invalid data or configuration.
+
+The asymptotic Kupiec p-value can be weak or unstable for small samples and tests only unconditional coverage. It does not establish exception independence, correct tail severity, forecast calibration under regime change, or future risk control; the streak diagnostics are descriptive rather than an independence test. Passing this audit is not a profitability, capital-adequacy, safety, or trading guarantee, and the tool does not estimate VaR or execute transactions.
+
 ## Rolling performance diagnostics
 
 Aggregate statistics can hide when a strategy's behavior changed. Measure every overlapping fixed-length window in a strict backtest equity export:
