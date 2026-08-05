@@ -8,6 +8,7 @@ __all__ = [
     "analyze_drawdowns",
     "analyze_return_tail",
     "analyze_rolling_performance",
+    "analyze_risk_contributions",
     "audit_portfolio_exposure",
     "backtest_crossover",
     "backtest_var_forecasts",
@@ -18,6 +19,7 @@ __all__ = [
     "load_equity_csv",
     "load_portfolio_csv",
     "load_price_csv",
+    "load_returns_csv",
     "maximum_drawdown",
     "sweep_crossover",
     "walk_forward_crossover",
@@ -51,6 +53,13 @@ def __getattr__(name: str) -> Any:
         from .tail_risk import analyze_return_tail
 
         return analyze_return_tail
+    if name in {"analyze_risk_contributions", "load_returns_csv"}:
+        from .risk_contribution import analyze_risk_contributions, load_returns_csv
+
+        return {
+            "analyze_risk_contributions": analyze_risk_contributions,
+            "load_returns_csv": load_returns_csv,
+        }[name]
     if name == "analyze_rolling_performance":
         from .rolling import analyze_rolling_performance
 
