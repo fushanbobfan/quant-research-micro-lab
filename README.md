@@ -39,6 +39,23 @@ Each dated snapshot reports long, short, gross, net, and absolute net exposure; 
 
 Exit code `0` means every configured exposure and concentration limit passed, `1` means valid weights exceeded at least one limit, and `2` identifies invalid CSV, duplicate positions, zero-exposure snapshots, or invalid configuration. This is a weight-file audit, not a portfolio optimizer or execution system. It does not model prices, liquidity, correlation, currency, borrow, margin, transaction costs, or future returns, so passing limits is not evidence that a portfolio is safe or profitable.
 
+## Historical risk contributions
+
+Estimate how a static portfolio's assets contribute to volatility under a sample covariance matrix:
+
+```powershell
+python -m quant_research_micro_lab.risk_contribution `
+  examples/portfolio-weights.csv examples/asset-returns.csv `
+  --max-largest-risk-share 0.65 `
+  --max-risk-concentration-hhi 0.50
+```
+
+The portfolio input reuses `date,asset,weight`; the latest snapshot is selected unless `--date` names another available snapshot. The returns input is a strict wide CSV whose first column is `date` and remaining headers exactly match the snapshot's nonzero assets. It needs at least two strictly increasing observations, and its last date cannot extend beyond the selected snapshot, preventing accidental look-ahead in the audit.
+
+The command uses sample covariance with `n - 1` in the denominator. It reports per-period and annualized portfolio volatility, the complete covariance matrix, standalone asset volatility, marginal volatility, and component volatility `weight * (covariance * weights) / portfolio volatility`. Component volatilities sum back to portfolio volatility within floating-point precision. Signed component fractions can be negative when an asset offsets other risk. Concentration gates instead normalize absolute component magnitudes, then report the largest share, HHI, and reciprocal effective contributor count.
+
+Exit code `0` means both optional concentration maximums passed, `1` reports structured failures, and `2` identifies malformed CSV, mismatched assets, look-ahead dates, zero historical portfolio variance, unsafe output aliasing, or invalid configuration. Historical covariance is sample-dependent and can change abruptly. Linear weights omit nonlinear instruments, changing exposures, liquidity, price impact, currency, financing, and estimation error. This audit is not an optimizer, VaR model, capital-adequacy assessment, forecast, trading recommendation, or guarantee of future diversification.
+
 ## Portfolio stress scenarios
 
 Apply explicit synthetic asset-return shocks to one dated portfolio snapshot without placing orders or estimating future returns:
