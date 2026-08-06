@@ -139,6 +139,21 @@ python -m quant_research_micro_lab.rolling examples/rolling-equity.csv `
 
 Overlapping windows are strongly dependent observations, and annualization assumes the supplied periods have a stable frequency matching `--periods-per-year`. A zero-volatility window reports Sharpe as `null` rather than inventing a ratio. These diagnostics describe the supplied curve and do not estimate trading capacity, future returns, or loss probabilities.
 
+## Return dependence diagnostics
+
+IID assumptions can be misleading when adjacent strategy returns are serially related. Inspect the simple returns implied by a dated equity export at every lag from one through a chosen maximum:
+
+```powershell
+python -m quant_research_micro_lab.dependence `
+  examples/dependence-equity.csv `
+  --max-lag 5 `
+  --max-abs-autocorrelation 0.80
+```
+
+The report includes mean and standard deviation, positive and negative return rates, each lag's standard centered sample autocorrelation, the largest absolute autocorrelation, and the Ljung-Box portmanteau statistic through the selected lag. The CLI accepts the same strict `date,equity,gross_equity` export as other equity diagnostics and can analyze either curve. Exit code `0` means the optional maximum absolute-autocorrelation gate passed, `1` reports a structured excess, and `2` identifies invalid data, zero-variance returns, an infeasible lag, unsafe output aliasing, or invalid configuration.
+
+This is a descriptive historical diagnostic, not a market-efficiency test, forecast, profitability claim, or trading signal. No Ljung-Box p-value is reported because finite-sample validity depends on assumptions and model choices outside this small tool. Nonstationarity, volatility clustering, overlapping construction, multiple lag inspection, and parameter selection on the same sample can all distort interpretation; use a predeclared lag horizon and stronger inference when decisions depend on statistical significance.
+
 ## Moving-block bootstrap diagnostics
 
 Resample contiguous return blocks to see how path-dependent metrics vary under alternative orderings of the supplied historical returns:
