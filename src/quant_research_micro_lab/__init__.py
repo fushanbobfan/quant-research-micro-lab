@@ -11,6 +11,7 @@ __all__ = [
     "analyze_rolling_performance",
     "analyze_risk_contributions",
     "audit_portfolio_exposure",
+    "audit_price_series",
     "backtest_crossover",
     "backtest_var_forecasts",
     "bootstrap_equity_performance",
@@ -43,6 +44,10 @@ def __getattr__(name: str) -> Any:
         from .bootstrap import bootstrap_equity_performance
 
         return bootstrap_equity_performance
+    if name == "audit_price_series":
+        from .price_audit import audit_price_series
+
+        return audit_price_series
     if name in {"analyze_drawdowns", "load_equity_csv"}:
         from .risk import analyze_drawdowns, load_equity_csv
 
