@@ -1,7 +1,12 @@
+import contextlib
+import io
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
 import quant_research_micro_lab
-from quant_research_micro_lab.price_audit import audit_price_series
+from quant_research_micro_lab.price_audit import audit_price_series, main
 
 
 class PriceAuditTests(unittest.TestCase):
@@ -118,6 +123,61 @@ class PriceAuditTests(unittest.TestCase):
         for settings in invalid_settings:
             with self.subTest(settings=settings), self.assertRaises(ValueError):
                 audit_price_series(self.dates, self.prices, **settings)
+
+    def test_cli_reads_strict_price_csv_and_writes_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            dataset = root / "prices.csv"
+            output = root / "audit.json"
+            dataset.write_text(
+                "date,close\n"
+                "2026-01-01,100\n"
+                "2026-01-02,100\n"
+                "2026-01-05,100\n"
+                "2026-01-06,150\n",
+                encoding="utf-8",
+            )
+
+            exit_code = main(
+                [
+                    str(dataset),
+                    "--max-calendar-gap-days",
+                    "3",
+                    "--max-unchanged-run",
+                    "2",
+                    "--max-abs-return",
+                    "0.5",
+                    "--output",
+                    str(output),
+                ]
+            )
+
+            self.assertEqual(exit_code, 0)
+            report = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(report["metrics"]["start_date"], "2026-01-01")
+            self.assertEqual(
+                report["metrics"]["maximum_calendar_gap"]["calendar_gap_days"],
+                3,
+            )
+
+    def test_cli_gate_failure_and_alias_use_stable_exit_codes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "prices.csv"
+            dataset.write_text(
+                "date,close\n2026-01-01,100\n2026-01-05,100\n",
+                encoding="utf-8",
+            )
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(
+                    main([str(dataset), "--max-calendar-gap-days", "2"]), 1
+                )
+            original = dataset.read_text(encoding="utf-8")
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(
+                    main([str(dataset), "--output", str(dataset)]), 2
+                )
+            self.assertEqual(dataset.read_text(encoding="utf-8"), original)
 
 
 if __name__ == "__main__":

@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import argparse
+import json
 import math
+import sys
 from collections.abc import Sequence
 from datetime import date
 from numbers import Real
+from pathlib import Path
 from typing import Any
+
+from .cli import load_price_csv
 
 
 def _validate_optional_count(
@@ -143,16 +149,16 @@ def audit_price_series(
     unchanged_runs = _unchanged_runs(dates, values)
     longest_unchanged = max(
         unchanged_runs,
-        key=lambda item: (item["unchanged_transitions"], item["start_date"]),
+        key=lambda item: item["unchanged_transitions"],
         default=None,
     )
     largest_gap = max(
         intervals,
-        key=lambda item: (item["calendar_gap_days"], item["start_date"]),
+        key=lambda item: item["calendar_gap_days"],
     )
     largest_return = max(
         return_periods,
-        key=lambda item: (item["absolute_return"], item["end_date"]),
+        key=lambda item: item["absolute_return"],
     )
     longest_unchanged_count = (
         longest_unchanged["unchanged_transitions"]
@@ -236,3 +242,49 @@ def audit_price_series(
         },
         "settings": {"max_details": max_details},
     }
+
+
+def _paths_alias(source: Path, output: Path) -> bool:
+    if source.resolve() == output.resolve():
+        return True
+    try:
+        return source.samefile(output)
+    except (FileNotFoundError, OSError):
+        return False
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("dataset", type=Path)
+    parser.add_argument("--max-calendar-gap-days", type=int)
+    parser.add_argument("--max-unchanged-run", type=int)
+    parser.add_argument("--max-abs-return", type=float)
+    parser.add_argument("--max-details", type=int, default=10)
+    parser.add_argument("--output", type=Path)
+    args = parser.parse_args(argv)
+
+    try:
+        if args.output is not None and _paths_alias(args.dataset, args.output):
+            raise ValueError("output must not alias the source dataset")
+        dates, prices = load_price_csv(args.dataset)
+        report = audit_price_series(
+            dates,
+            prices,
+            max_calendar_gap_days=args.max_calendar_gap_days,
+            max_unchanged_run=args.max_unchanged_run,
+            max_abs_return=args.max_abs_return,
+            max_details=args.max_details,
+        )
+        rendered = json.dumps(report, indent=2) + "\n"
+        if args.output is None:
+            print(rendered, end="")
+        else:
+            args.output.write_text(rendered, encoding="utf-8")
+    except (OSError, UnicodeError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+    return int(not report["passed"])
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
