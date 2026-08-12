@@ -23,6 +23,23 @@ python -m quant_research_micro_lab.cli examples/synthetic_prices.csv `
 
 The JSON report records the observation range and all performance fields. The optional equity export aligns each input date with net and gross equity, which makes downstream checking straightforward. Malformed input and invalid backtest parameters return exit code `2` without writing a result.
 
+## Price-series data quality audit
+
+Inspect a strict `date,close` research file before using it in a backtest:
+
+```powershell
+python -m quant_research_micro_lab.price_audit examples/price-quality.csv `
+  --max-calendar-gap-days 3 `
+  --max-unchanged-run 3 `
+  --max-abs-return 0.30
+```
+
+The report measures the mean and maximum calendar-day gap, counts gaps longer than one day, identifies consecutive exact unchanged closes, and ranks the largest absolute simple returns. Summary extrema and bounded detail lists retain dates so a researcher can trace each warning to the input. An unchanged run is measured in transitions: three unchanged transitions span four consecutive observations at the same close.
+
+Exit code `0` means every configured gap, unchanged-run, and absolute-return maximum passed; `1` reports all structured threshold failures; and `2` identifies malformed CSV, fewer than two observations, unsafe output aliasing, or invalid configuration. The source file is opened read-only, and the command never repairs prices or places trades.
+
+Calendar gaps are not exchange-calendar missing-session tests: weekends, holidays, suspensions, and assets with different trading schedules can all produce valid gaps. Exact unchanged prices can be genuine for illiquid assets, while large returns can reflect real moves, splits, distributions, currency effects, or missing adjustment data. The audit flags observations for review; it does not prove a data error, validate corporate-action treatment, forecast returns, or support a trading signal. Set gates for the intended asset, frequency, vendor, and adjustment convention before reviewing the final dataset.
+
 ## Portfolio exposure audit
 
 Inspect synthetic or research portfolio weights without placing orders:
