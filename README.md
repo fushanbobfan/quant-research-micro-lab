@@ -171,6 +171,23 @@ The report includes mean and standard deviation, positive and negative return ra
 
 This is a descriptive historical diagnostic, not a market-efficiency test, forecast, profitability claim, or trading signal. No Ljung-Box p-value is reported because finite-sample validity depends on assumptions and model choices outside this small tool. Nonstationarity, volatility clustering, overlapping construction, multiple lag inspection, and parameter selection on the same sample can all distort interpretation; use a predeclared lag horizon and stronger inference when decisions depend on statistical significance.
 
+## Correlation drift diagnostics
+
+Portfolio assumptions can change when asset relationships differ across historical windows. Compare strict wide return files with the same asset columns:
+
+```powershell
+python -m quant_research_micro_lab.correlation_drift `
+  examples/correlation-baseline.csv `
+  examples/correlation-candidate.csv `
+  --max-abs-correlation-change 1.99 `
+  --max-rms-correlation-change 1.25 `
+  --max-sign-flips 3
+```
+
+Each CSV must begin with `date` followed by at least two unique asset columns, and each window needs at least three strictly ordered observations. The dates do not need to align across windows. The report compares every asset pair using sample Pearson correlation, then summarizes mean absolute change and root-mean-square change. It also reports the largest changed pair and the number of strict sign flips. Pair details are sorted by absolute change and bounded with `--max-details`. A constant asset fails closed because its correlation is undefined.
+
+Exit code `0` means every configured maximum passed, `1` reports structured drift failures, and `2` identifies malformed returns, inconsistent asset schemas, zero-variance series, unsafe path aliasing, or invalid configuration. This is a descriptive comparison of two finite samples. Correlations can move because of sampling noise, window selection, outliers, nonstationarity, or regime changes, and overlapping windows make the comparison dependent. The report is not a significance test, covariance forecast, diversification guarantee, trading signal, or advice.
+
 ## Moving-block bootstrap diagnostics
 
 Resample contiguous return blocks to see how path-dependent metrics vary under alternative orderings of the supplied historical returns:
