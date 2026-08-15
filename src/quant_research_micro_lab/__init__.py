@@ -9,6 +9,7 @@ __all__ = [
     "analyze_return_tail",
     "analyze_return_dependence",
     "analyze_correlation_drift",
+    "analyze_cost_sensitivity",
     "analyze_rolling_performance",
     "analyze_risk_contributions",
     "audit_portfolio_exposure",
@@ -34,6 +35,10 @@ def __getattr__(name: str) -> Any:
         from .correlation_drift import analyze_correlation_drift
 
         return analyze_correlation_drift
+    if name == "analyze_cost_sensitivity":
+        from .cost_sensitivity import analyze_cost_sensitivity
+
+        return analyze_cost_sensitivity
     if name == "backtest_var_forecasts":
         from .var_backtest import backtest_var_forecasts
 
