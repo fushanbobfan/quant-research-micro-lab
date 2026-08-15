@@ -23,6 +23,26 @@ python -m quant_research_micro_lab.cli examples/synthetic_prices.csv `
 
 The JSON report records the observation range and all performance fields. The optional equity export aligns each input date with net and gross equity, which makes downstream checking straightforward. Malformed input and invalid backtest parameters return exit code `2` without writing a result.
 
+## Transaction-cost sensitivity audit
+
+A single cost assumption can hide how quickly a backtest degrades. Run the same lagged crossover strategy across an explicit grid that includes a zero-cost baseline:
+
+```powershell
+python -m quant_research_micro_lab.cost_sensitivity `
+  examples/cost-sensitivity-prices.csv `
+  --short-window 2 --long-window 3 `
+  --transaction-cost-bps 0 `
+  --transaction-cost-bps 100 `
+  --transaction-cost-bps 500 `
+  --max-return-degradation 0.20
+```
+
+The report sorts unique tested costs, repeats the compact return, drawdown, volatility, turnover, and cost-drag diagnostics for each scenario, and measures every return change from the zero-cost run. It also identifies the first tested nonpositive result and, when present, the adjacent tested costs that bracket a positive-to-nonpositive change. That bracket is not an interpolated or estimated break-even cost. Optional gates bound the zero-to-highest-cost return degradation or require a minimum historical return at the highest tested cost. `--output` writes JSON only when it does not alias the source CSV.
+
+Exit code `0` means configured gates passed, `1` reports structured threshold failures, and `2` identifies malformed prices, an invalid or duplicate cost grid, a missing zero baseline, unsafe output aliasing, or invalid configuration. Costs use the backtest's one-way turnover model; the final open position is not forcibly liquidated.
+
+This is a finite historical scenario comparison, not an execution simulator, cost forecast, strategy recommendation, or profitability guarantee. The model omits spread variation, slippage, market impact, liquidity, partial fills, taxes, borrow, financing, and changing fees. A tested minimum return is a reproducibility gate for supplied data, not evidence of future performance, and the selected window parameters can still be overfit.
+
 ## Price-series data quality audit
 
 Inspect a strict `date,close` research file before using it in a backtest:
