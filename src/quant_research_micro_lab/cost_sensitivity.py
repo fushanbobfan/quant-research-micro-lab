@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import argparse
+import json
 import math
+import sys
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 
 from .backtest import backtest_crossover
+from .cli import load_price_csv
 
 
 def _validate_costs(values: Sequence[float]) -> list[float]:
@@ -173,3 +178,65 @@ def analyze_cost_sensitivity(
             "transaction_costs_bps": costs,
         },
     }
+
+
+def _paths_alias(source: Path, output: Path) -> bool:
+    if source.resolve() == output.resolve():
+        return True
+    try:
+        return source.samefile(output)
+    except (FileNotFoundError, OSError):
+        return False
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("dataset", type=Path)
+    parser.add_argument("--short-window", type=int, default=5)
+    parser.add_argument("--long-window", type=int, default=20)
+    parser.add_argument(
+        "--transaction-cost-bps",
+        type=float,
+        action="append",
+        required=True,
+        dest="transaction_costs_bps",
+        help="tested one-way turnover cost; repeat and include zero",
+    )
+    parser.add_argument("--max-return-degradation", type=float)
+    parser.add_argument("--min-total-return-at-highest-cost", type=float)
+    parser.add_argument("--output", type=Path)
+    args = parser.parse_args(argv)
+
+    try:
+        if args.output is not None and _paths_alias(args.dataset, args.output):
+            raise ValueError("output must not alias the source dataset")
+        dates, prices = load_price_csv(args.dataset)
+        result = analyze_cost_sensitivity(
+            prices,
+            short_window=args.short_window,
+            long_window=args.long_window,
+            transaction_costs_bps=args.transaction_costs_bps,
+            max_return_degradation=args.max_return_degradation,
+            min_total_return_at_highest_cost=(
+                args.min_total_return_at_highest_cost
+            ),
+        )
+        report = {
+            "observations": len(dates),
+            "start_date": dates[0],
+            "end_date": dates[-1],
+            **result,
+        }
+        rendered = json.dumps(report, indent=2) + "\n"
+        if args.output is None:
+            print(rendered, end="")
+        else:
+            args.output.write_text(rendered, encoding="utf-8")
+    except (OSError, UnicodeError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+    return int(not report["passed"])
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

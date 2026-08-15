@@ -1,6 +1,12 @@
+import contextlib
+import io
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
-from quant_research_micro_lab.cost_sensitivity import analyze_cost_sensitivity
+import quant_research_micro_lab
+from quant_research_micro_lab.cost_sensitivity import analyze_cost_sensitivity, main
 
 
 class CostSensitivityTests(unittest.TestCase):
@@ -14,6 +20,7 @@ class CostSensitivityTests(unittest.TestCase):
             transaction_costs_bps=[500, 0, 100],
         )
 
+        self.assertIs(quant_research_micro_lab.analyze_cost_sensitivity, analyze_cost_sensitivity)
         self.assertTrue(report["passed"])
         self.assertEqual(report["settings"]["transaction_costs_bps"], [0.0, 100.0, 500.0])
         returns = [scenario["total_return"] for scenario in report["scenarios"]]
@@ -90,6 +97,91 @@ class CostSensitivityTests(unittest.TestCase):
                         transaction_costs_bps=[0, 10],
                         max_return_degradation=threshold,
                     )
+
+    def test_cli_writes_a_dated_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            dataset = root / "prices.csv"
+            output = root / "report.json"
+            dataset.write_text(
+                "date,close\n"
+                + "".join(
+                    f"2026-01-{index:02d},{price}\n"
+                    for index, price in enumerate(self.prices, start=1)
+                ),
+                encoding="utf-8",
+            )
+
+            exit_code = main(
+                [
+                    str(dataset),
+                    "--short-window",
+                    "2",
+                    "--long-window",
+                    "3",
+                    "--transaction-cost-bps",
+                    "0",
+                    "--transaction-cost-bps",
+                    "500",
+                    "--max-return-degradation",
+                    "0.2",
+                    "--output",
+                    str(output),
+                ]
+            )
+
+            report = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(report["observations"], len(self.prices))
+            self.assertEqual(report["start_date"], "2026-01-01")
+            self.assertTrue(report["passed"])
+
+    def test_cli_returns_one_for_gate_failure_and_two_for_alias(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "prices.csv"
+            dataset.write_text(
+                "date,close\n"
+                + "".join(
+                    f"2026-01-{index:02d},{price}\n"
+                    for index, price in enumerate(self.prices, start=1)
+                ),
+                encoding="utf-8",
+            )
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(
+                    main(
+                        [
+                            str(dataset),
+                            "--short-window",
+                            "2",
+                            "--long-window",
+                            "3",
+                            "--transaction-cost-bps",
+                            "0",
+                            "--transaction-cost-bps",
+                            "500",
+                            "--max-return-degradation",
+                            "0.01",
+                        ]
+                    ),
+                    1,
+                )
+
+            original = dataset.read_text(encoding="utf-8")
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(
+                    main(
+                        [
+                            str(dataset),
+                            "--transaction-cost-bps",
+                            "0",
+                            "--output",
+                            str(dataset),
+                        ]
+                    ),
+                    2,
+                )
+            self.assertEqual(dataset.read_text(encoding="utf-8"), original)
 
 
 if __name__ == "__main__":
