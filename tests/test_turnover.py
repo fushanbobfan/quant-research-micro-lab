@@ -1,6 +1,15 @@
+import contextlib
+import io
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
-from quant_research_micro_lab.turnover import audit_portfolio_turnover
+from quant_research_micro_lab.turnover import (
+    MAX_INPUT_BYTES,
+    audit_portfolio_turnover,
+    main,
+)
 
 
 class PortfolioTurnoverTests(unittest.TestCase):
@@ -88,6 +97,55 @@ class PortfolioTurnoverTests(unittest.TestCase):
                         self.records,
                         max_transition_turnover=value,
                     )
+
+    def test_cli_writes_a_report_and_uses_gate_exit_code(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "weights.csv"
+            output = Path(directory) / "report.json"
+            dataset.write_text(
+                "date,asset,weight\n"
+                "2026-01-01,AAA,0.6\n"
+                "2026-01-01,BBB,0.4\n"
+                "2026-01-02,AAA,0.2\n"
+                "2026-01-02,BBB,0.8\n",
+                encoding="utf-8",
+            )
+
+            exit_code = main(
+                [
+                    str(dataset),
+                    "--max-transition-turnover",
+                    "0.2",
+                    "--output",
+                    str(output),
+                ]
+            )
+
+            self.assertEqual(exit_code, 1)
+            report = json.loads(output.read_text(encoding="utf-8"))
+            self.assertFalse(report["passed"])
+            self.assertEqual(report["failures"][0]["metric"], "transition_turnover")
+
+    def test_cli_rejects_oversized_input_and_output_alias(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "weights.csv"
+            dataset.write_bytes(b" " * (MAX_INPUT_BYTES + 1))
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(main([str(dataset)]), 2)
+
+            dataset.write_text(
+                "date,asset,weight\n"
+                "2026-01-01,AAA,1\n"
+                "2026-01-02,AAA,1\n",
+                encoding="utf-8",
+            )
+            original = dataset.read_text(encoding="utf-8")
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(
+                    main([str(dataset), "--output", str(dataset)]),
+                    2,
+                )
+            self.assertEqual(dataset.read_text(encoding="utf-8"), original)
 
 
 if __name__ == "__main__":

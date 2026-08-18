@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import argparse
+import json
+import sys
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import Any
 
-from .exposure import _validate_limit, _validate_records
+from .exposure import _validate_limit, _validate_records, load_portfolio_csv
+
+MAX_INPUT_BYTES = 10 * 1024 * 1024
 
 
 def audit_portfolio_turnover(
@@ -188,3 +194,49 @@ def audit_portfolio_turnover(
         "transitions": transitions,
         "settings": {"max_details": max_details},
     }
+
+
+def _paths_alias(source: Path, output: Path) -> bool:
+    if source.resolve() == output.resolve():
+        return True
+    try:
+        return source.samefile(output)
+    except (FileNotFoundError, OSError):
+        return False
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("dataset", type=Path)
+    parser.add_argument("--max-transition-turnover", type=float)
+    parser.add_argument("--max-position-change", type=float)
+    parser.add_argument("--max-cumulative-turnover", type=float)
+    parser.add_argument("--max-details", type=int, default=20)
+    parser.add_argument("--output", type=Path)
+    args = parser.parse_args(argv)
+
+    try:
+        if args.output is not None and _paths_alias(args.dataset, args.output):
+            raise ValueError("output must not alias the source dataset")
+        if args.dataset.stat().st_size > MAX_INPUT_BYTES:
+            raise ValueError(f"dataset exceeds {MAX_INPUT_BYTES} bytes")
+        report = audit_portfolio_turnover(
+            load_portfolio_csv(args.dataset),
+            max_transition_turnover=args.max_transition_turnover,
+            max_position_change=args.max_position_change,
+            max_cumulative_turnover=args.max_cumulative_turnover,
+            max_details=args.max_details,
+        )
+        rendered = json.dumps(report, indent=2) + "\n"
+        if args.output is None:
+            print(rendered, end="")
+        else:
+            args.output.write_text(rendered, encoding="utf-8")
+    except (OSError, UnicodeError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+    return int(not report["passed"])
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
