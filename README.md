@@ -76,6 +76,21 @@ Each dated snapshot reports long, short, gross, net, and absolute net exposure; 
 
 Exit code `0` means every configured exposure and concentration limit passed, `1` means valid weights exceeded at least one limit, and `2` identifies invalid CSV, duplicate positions, zero-exposure snapshots, or invalid configuration. This is a weight-file audit, not a portfolio optimizer or execution system. It does not model prices, liquidity, correlation, currency, borrow, margin, transaction costs, or future returns, so passing limits is not evidence that a portfolio is safe or profitable.
 
+## Portfolio turnover audit
+
+The exposure report includes one turnover number per snapshot. Use the dedicated turnover audit when a review also needs position-level changes, additions, removals, sign flips, and explicit change budgets:
+
+```powershell
+python -m quant_research_micro_lab.turnover examples/portfolio-weights.csv `
+  --max-transition-turnover 0.35 `
+  --max-position-change 0.45 `
+  --max-cumulative-turnover 0.50
+```
+
+For every consecutive snapshot pair, the report evaluates the union of asset identifiers and calculates signed weight changes, total absolute change, and one-way turnover as `0.5 * sum(abs(change))`. Per-asset details are sorted by absolute change and bounded with `--max-details`, while complete transition counts, cumulative turnover, the largest transition, and the largest individual change remain visible. Optional maximums produce stable failures; exit codes are `0` for pass, `1` for a valid threshold failure, and `2` for malformed or oversized input, invalid settings, or unsafe output aliasing.
+
+This is a read-only comparison of supplied weight snapshots, not a trade ledger, transaction-cost estimate, optimizer, or execution plan. The one-way convention is most interpretable for comparable normalized portfolios; deposits, withdrawals, leverage changes, derivatives, corporate actions, stale prices, and valuation changes can all make weight changes differ from traded notional. Asset identifiers and dated changes can be sensitive, and passing finite historical limits does not establish liquidity, capacity, profitability, or future behavior.
+
 ## Historical risk contributions
 
 Estimate how a static portfolio's assets contribute to volatility under a sample covariance matrix:

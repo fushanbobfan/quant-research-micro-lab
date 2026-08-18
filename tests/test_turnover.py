@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import quant_research_micro_lab
 from quant_research_micro_lab.turnover import (
     MAX_INPUT_BYTES,
     audit_portfolio_turnover,
@@ -24,6 +25,12 @@ class PortfolioTurnoverTests(unittest.TestCase):
             {"date": "2026-01-03", "asset": "BBB", "weight": -0.2},
             {"date": "2026-01-03", "asset": "CCC", "weight": 0.3},
         ]
+
+    def test_public_api_exposes_turnover_audit(self):
+        self.assertIs(
+            quant_research_micro_lab.audit_portfolio_turnover,
+            audit_portfolio_turnover,
+        )
 
     def test_reports_transition_and_per_asset_change_diagnostics(self):
         report = audit_portfolio_turnover(self.records, max_details=2)
