@@ -13,6 +13,7 @@ __all__ = [
     "analyze_rolling_performance",
     "analyze_risk_contributions",
     "audit_portfolio_exposure",
+    "audit_portfolio_turnover",
     "audit_price_series",
     "backtest_crossover",
     "backtest_var_forecasts",
@@ -43,6 +44,10 @@ def __getattr__(name: str) -> Any:
         from .var_backtest import backtest_var_forecasts
 
         return backtest_var_forecasts
+    if name == "audit_portfolio_turnover":
+        from .turnover import audit_portfolio_turnover
+
+        return audit_portfolio_turnover
     if name in {"audit_portfolio_exposure", "load_portfolio_csv"}:
         from .exposure import audit_portfolio_exposure, load_portfolio_csv
 
