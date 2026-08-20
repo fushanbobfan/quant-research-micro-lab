@@ -60,6 +60,22 @@ Exit code `0` means every configured gap, unchanged-run, and absolute-return max
 
 Calendar gaps are not exchange-calendar missing-session tests: weekends, holidays, suspensions, and assets with different trading schedules can all produce valid gaps. Exact unchanged prices can be genuine for illiquid assets, while large returns can reflect real moves, splits, distributions, currency effects, or missing adjustment data. The audit flags observations for review; it does not prove a data error, validate corporate-action treatment, forecast returns, or support a trading signal. Set gates for the intended asset, frequency, vendor, and adjustment convention before reviewing the final dataset.
 
+## Panel data coverage audit
+
+Measure missing cells in a dated wide research panel before covariance, factor, or cross-sectional analysis:
+
+```powershell
+quant-panel-coverage examples/panel-coverage.csv `
+  --min-overall-coverage 0.80 `
+  --min-asset-coverage 0.70 `
+  --max-missing-streak 1 `
+  --max-incomplete-row-rate 0.50
+```
+
+The first CSV column must be `date`; every remaining header is an asset identifier. Rows must use strictly increasing `YYYY-MM-DD` dates. Blank asset cells are treated as missing, while populated cells must be finite numbers. The report includes overall and per-asset coverage, complete and incomplete row counts, each asset's missing-streak count, the longest consecutive missing streak, and a bounded list of the least-complete dates. `--max-file-bytes` bounds input before parsing, and output cannot alias the source CSV.
+
+Exit code `0` means all configured coverage minimums and missingness maximums passed, `1` reports structured threshold failures, and `2` identifies malformed, oversized, non-finite, or unsafely addressed input. This is a presence audit, not an imputer or a validation of values, timestamps, exchange calendars, survivorship treatment, corporate actions, or sampling design. Missingness can be informative and different assets can have legitimate calendars; passing thresholds does not establish unbiased estimation, tradability, profitability, or future data availability.
+
 ## Portfolio exposure audit
 
 Inspect synthetic or research portfolio weights without placing orders:
