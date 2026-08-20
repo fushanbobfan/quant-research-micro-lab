@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import quant_research_micro_lab
 from quant_research_micro_lab.panel_coverage import audit_panel_coverage, main
 
 
@@ -16,6 +17,12 @@ class PanelCoverageAuditTests(unittest.TestCase):
             {"date": "2026-01-03", "ALPHA": None, "BETA": 0.02, "GAMMA": 0.03},
             {"date": "2026-01-04", "ALPHA": 0.01, "BETA": None, "GAMMA": 0.03},
         ]
+
+    def test_panel_coverage_api_is_available_from_package(self):
+        self.assertIs(
+            quant_research_micro_lab.audit_panel_coverage,
+            audit_panel_coverage,
+        )
 
     def test_reports_panel_asset_and_missing_streak_coverage(self):
         report = audit_panel_coverage(self.records)
