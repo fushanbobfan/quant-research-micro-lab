@@ -11,6 +11,7 @@ license = "MIT"
 
 [project.scripts]
 quant-backtest = "quant_research_micro_lab.cli:main"
+quant-allocation-drift = "quant_research_micro_lab.allocation_drift:main"
 quant-benchmark = "quant_research_micro_lab.benchmark:main"
 quant-bootstrap = "quant_research_micro_lab.bootstrap:main"
 quant-correlation-drift = "quant_research_micro_lab.correlation_drift:main"

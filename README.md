@@ -92,6 +92,25 @@ Each dated snapshot reports long, short, gross, net, and absolute net exposure; 
 
 Exit code `0` means every configured exposure and concentration limit passed, `1` means valid weights exceeded at least one limit, and `2` identifies invalid CSV, duplicate positions, zero-exposure snapshots, or invalid configuration. This is a weight-file audit, not a portfolio optimizer or execution system. It does not model prices, liquidity, correlation, currency, borrow, margin, transaction costs, or future returns, so passing limits is not evidence that a portfolio is safe or profitable.
 
+## Target allocation drift audit
+
+Compare supplied target and actual portfolio weights at each dated snapshot:
+
+```powershell
+quant-allocation-drift examples/allocation-drift.csv `
+  --asset-tolerance 0.04 `
+  --max-average-l1-drift 0.12 `
+  --max-snapshot-l1-drift 0.15 `
+  --max-asset-drift 0.08 `
+  --min-within-tolerance-rate 0.65
+```
+
+The input header must be exactly `date,asset,target_weight,actual_weight`. Dates use `YYYY-MM-DD` and must be grouped in increasing order; each date-and-asset pair is unique. Every target and actual weight must be finite. Include an explicit zero when an asset is absent from one side because the command audits the rows supplied and does not infer a missing asset universe.
+
+The report includes average and worst-snapshot L1 drift, the largest single-asset deviation, net-weight differences, root mean square drift, and the share of comparisons within `--asset-tolerance`. Worst snapshots and asset details are bounded by `--max-details`. Decimal threshold boundaries use a narrow numerical tolerance so a value represented infinitesimally above an equal decimal limit is not treated as a breach.
+
+Exit code `0` means every configured gate passed, `1` reports all valid threshold failures, and `2` identifies malformed or oversized input, invalid settings, or an unsafe output alias. This is a read-only reconciliation of supplied weights. It does not reconstruct trades, estimate costs, normalize allocations, validate prices, or recommend rebalancing. A passing report does not establish portfolio suitability, profitability, or future tracking behavior.
+
 ## Portfolio turnover audit
 
 The exposure report includes one turnover number per snapshot. Use the dedicated turnover audit when a review also needs position-level changes, additions, removals, sign flips, and explicit change budgets:
