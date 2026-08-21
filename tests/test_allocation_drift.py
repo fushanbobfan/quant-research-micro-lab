@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import quant_research_micro_lab
 from quant_research_micro_lab.allocation_drift import (
     audit_allocation_drift,
     load_allocation_csv,
@@ -22,6 +23,12 @@ class AllocationDriftTests(unittest.TestCase):
             {"date": "2026-01-02", "asset": "BBB", "target_weight": 0.3, "actual_weight": 0.2},
             {"date": "2026-01-02", "asset": "CCC", "target_weight": 0.2, "actual_weight": 0.1},
         ]
+
+    def test_public_api_exposes_allocation_drift_audit(self):
+        self.assertIs(
+            quant_research_micro_lab.audit_allocation_drift,
+            audit_allocation_drift,
+        )
 
     def test_reports_snapshot_and_asset_drift(self):
         report = audit_allocation_drift(self.records, asset_tolerance=0.1)

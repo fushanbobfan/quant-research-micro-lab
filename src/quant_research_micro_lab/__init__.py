@@ -12,6 +12,7 @@ __all__ = [
     "analyze_cost_sensitivity",
     "analyze_rolling_performance",
     "analyze_risk_contributions",
+    "audit_allocation_drift",
     "audit_portfolio_exposure",
     "audit_portfolio_turnover",
     "audit_panel_coverage",
@@ -33,6 +34,10 @@ __all__ = [
 
 
 def __getattr__(name: str) -> Any:
+    if name == "audit_allocation_drift":
+        from .allocation_drift import audit_allocation_drift
+
+        return audit_allocation_drift
     if name == "analyze_correlation_drift":
         from .correlation_drift import analyze_correlation_drift
 
