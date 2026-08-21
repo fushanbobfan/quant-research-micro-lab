@@ -49,6 +49,18 @@ def _weight(value: Any, *, field: str, record_index: int) -> float:
     return float(value)
 
 
+def _exceeds(actual: float, limit: float) -> bool:
+    return actual > limit and not math.isclose(
+        actual, limit, rel_tol=1e-12, abs_tol=1e-15
+    )
+
+
+def _below(actual: float, minimum: float) -> bool:
+    return actual < minimum and not math.isclose(
+        actual, minimum, rel_tol=1e-12, abs_tol=1e-15
+    )
+
+
 def audit_allocation_drift(
     records: Sequence[Mapping[str, Any]],
     *,
@@ -125,7 +137,7 @@ def audit_allocation_drift(
                 "actual_weight": actual,
                 "drift": drift,
                 "absolute_drift": abs(drift),
-                "within_tolerance": abs(drift) <= tolerance,
+                "within_tolerance": not _exceeds(abs(drift), tolerance),
             }
         )
         all_assets.add(asset)
@@ -171,7 +183,7 @@ def audit_allocation_drift(
 
     failures = []
     average_limit = thresholds["average_l1_drift"]
-    if average_limit is not None and average_l1_drift > average_limit:
+    if average_limit is not None and _exceeds(average_l1_drift, average_limit):
         failures.append(
             {
                 "metric": "average_l1_drift",
@@ -181,7 +193,9 @@ def audit_allocation_drift(
             }
         )
     snapshot_limit = thresholds["snapshot_l1_drift"]
-    if snapshot_limit is not None and maximum_snapshot["l1_drift"] > snapshot_limit:
+    if snapshot_limit is not None and _exceeds(
+        maximum_snapshot["l1_drift"], snapshot_limit
+    ):
         failures.append(
             {
                 "metric": "snapshot_l1_drift",
@@ -192,7 +206,9 @@ def audit_allocation_drift(
             }
         )
     asset_limit = thresholds["asset_drift"]
-    if asset_limit is not None and maximum_asset["absolute_drift"] > asset_limit:
+    if asset_limit is not None and _exceeds(
+        maximum_asset["absolute_drift"], asset_limit
+    ):
         failures.append(
             {
                 "metric": "asset_drift",
@@ -204,7 +220,7 @@ def audit_allocation_drift(
             }
         )
     minimum_rate = thresholds["within_tolerance_rate"]
-    if within_rate < minimum_rate:
+    if _below(within_rate, minimum_rate):
         failures.append(
             {
                 "metric": "within_tolerance_rate",

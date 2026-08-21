@@ -94,6 +94,24 @@ class AllocationDriftTests(unittest.TestCase):
         self.assertAlmostEqual(detail["actual_net_weight"], 0.95)
         self.assertAlmostEqual(detail["net_weight_drift"], -0.05)
 
+    def test_decimal_weight_at_exact_tolerance_is_not_a_false_breach(self):
+        report = audit_allocation_drift(
+            [
+                {
+                    "date": "2026-01-01",
+                    "asset": "AAA",
+                    "target_weight": 0.30,
+                    "actual_weight": 0.34,
+                }
+            ],
+            asset_tolerance=0.04,
+            max_asset_drift=0.04,
+            min_within_tolerance_rate=1.0,
+        )
+
+        self.assertTrue(report["passed"])
+        self.assertEqual(report["summary"]["within_tolerance_rate"], 1.0)
+
     def test_invalid_records_and_thresholds_are_rejected(self):
         cases = [
             ([], {}, "at least one"),
