@@ -92,6 +92,25 @@ Each dated snapshot reports long, short, gross, net, and absolute net exposure; 
 
 Exit code `0` means every configured exposure and concentration limit passed, `1` means valid weights exceeded at least one limit, and `2` identifies invalid CSV, duplicate positions, zero-exposure snapshots, or invalid configuration. This is a weight-file audit, not a portfolio optimizer or execution system. It does not model prices, liquidity, correlation, currency, borrow, margin, transaction costs, or future returns, so passing limits is not evidence that a portfolio is safe or profitable.
 
+## Portfolio group exposure audit
+
+An acceptable single-name limit can still hide a portfolio concentrated in one sector, region, strategy sleeve, or another supplied grouping. Aggregate signed position weights by group for each dated snapshot:
+
+```powershell
+python -m quant_research_micro_lab.group_exposure `
+  examples/group-exposure.csv `
+  --max-group-gross-share 0.60 `
+  --max-abs-group-net-exposure 0.40 `
+  --max-group-concentration-hhi 0.50 `
+  --min-effective-groups 2.0
+```
+
+The strict CSV schema is `date,asset,group,weight`. Dates must use `YYYY-MM-DD` in nondecreasing order, each asset may appear once per date, group names must be non-empty, and weights must be finite. Long and short positions are supported. Group gross exposure sums absolute position weights, group net exposure keeps signs, and gross share divides a group's gross exposure by the snapshot's total gross exposure.
+
+The report includes per-snapshot group gross/net/long/short exposure, group gross shares, group-concentration HHI, effective group counts, dated extrema, bounded details, and structured gate failures. Floating-point comparisons at configured decimal boundaries use a narrow tolerance to avoid false breaches. Input bytes and detail output are bounded, output aliasing is rejected, and exit codes are `0` for pass, `1` for valid threshold failure, and `2` for invalid input or configuration.
+
+This is a read-only aggregation of the classifications and weights supplied in one finite export. It does not validate whether group labels are correct or stable through time, estimate returns, factor risk, liquidity, transaction costs, execution, or diversification benefits, and it is not trading or investment advice. Gross-share normalization can also make a small portfolio and a levered portfolio look equally concentrated, so review the absolute exposure metrics separately. Asset and group names can be sensitive; use synthetic examples and review saved reports before sharing them.
+
 ## Target allocation drift audit
 
 Compare supplied target and actual portfolio weights at each dated snapshot:
