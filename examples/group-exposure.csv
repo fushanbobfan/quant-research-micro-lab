@@ -1,0 +1,9 @@
+date,asset,group,weight
+2026-01-02,AAA,Technology,0.40
+2026-01-02,BBB,Healthcare,0.30
+2026-01-02,CCC,Technology,-0.15
+2026-01-02,DDD,Utilities,0.15
+2026-02-02,AAA,Technology,0.35
+2026-02-02,BBB,Healthcare,0.35
+2026-02-02,CCC,Technology,-0.10
+2026-02-02,DDD,Utilities,0.20

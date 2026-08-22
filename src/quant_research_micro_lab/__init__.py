@@ -13,6 +13,7 @@ __all__ = [
     "analyze_rolling_performance",
     "analyze_risk_contributions",
     "audit_allocation_drift",
+    "audit_group_exposure",
     "audit_portfolio_exposure",
     "audit_portfolio_turnover",
     "audit_panel_coverage",
@@ -24,6 +25,7 @@ __all__ = [
     "compare_to_benchmark",
     "evaluate_portfolio_stress",
     "load_equity_csv",
+    "load_group_exposure_csv",
     "load_portfolio_csv",
     "load_price_csv",
     "load_returns_csv",
@@ -38,6 +40,13 @@ def __getattr__(name: str) -> Any:
         from .allocation_drift import audit_allocation_drift
 
         return audit_allocation_drift
+    if name in {"audit_group_exposure", "load_group_exposure_csv"}:
+        from .group_exposure import audit_group_exposure, load_group_exposure_csv
+
+        return {
+            "audit_group_exposure": audit_group_exposure,
+            "load_group_exposure_csv": load_group_exposure_csv,
+        }[name]
     if name == "analyze_correlation_drift":
         from .correlation_drift import analyze_correlation_drift
 

@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import argparse
+import csv
+import json
 import math
+import sys
 from collections.abc import Mapping, Sequence
 from datetime import date
 from numbers import Real
+from pathlib import Path
 from typing import Any
 
 
@@ -340,3 +345,91 @@ def audit_group_exposure(
         "omitted_snapshot_count": max(0, len(snapshots) - max_details),
         "settings": {"max_details": max_details},
     }
+
+
+def load_group_exposure_csv(
+    path: Path, *, max_file_bytes: int = 10 * 1024 * 1024
+) -> list[dict[str, Any]]:
+    """Load the strict date,asset,group,weight CSV format."""
+    if (
+        isinstance(max_file_bytes, bool)
+        or not isinstance(max_file_bytes, int)
+        or max_file_bytes <= 0
+    ):
+        raise ValueError("max_file_bytes must be a positive integer")
+    if path.stat().st_size > max_file_bytes:
+        raise ValueError(f"dataset exceeds max_file_bytes ({max_file_bytes})")
+
+    records = []
+    with path.open(newline="", encoding="utf-8-sig") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames != ["date", "asset", "group", "weight"]:
+            raise ValueError("CSV header must be exactly: date,asset,group,weight")
+        for row_number, row in enumerate(reader, start=2):
+            if None in row or any(value is None for value in row.values()):
+                raise ValueError(f"row {row_number} must contain exactly four fields")
+            try:
+                weight = float(row.get("weight") or "")
+            except ValueError as error:
+                raise ValueError(f"row {row_number} has an invalid weight") from error
+            records.append(
+                {
+                    "date": row.get("date"),
+                    "asset": row.get("asset"),
+                    "group": row.get("group"),
+                    "weight": weight,
+                }
+            )
+    if not records:
+        raise ValueError("CSV must contain at least one position row")
+    return records
+
+
+def _paths_alias(source: Path, output: Path) -> bool:
+    if source.resolve() == output.resolve():
+        return True
+    try:
+        return source.samefile(output)
+    except (FileNotFoundError, OSError):
+        return False
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("dataset", type=Path)
+    parser.add_argument("--max-group-gross-share", type=float)
+    parser.add_argument("--max-abs-group-net-exposure", type=float)
+    parser.add_argument("--max-group-concentration-hhi", type=float)
+    parser.add_argument("--min-effective-groups", type=float)
+    parser.add_argument("--max-details", type=int, default=20)
+    parser.add_argument("--max-file-bytes", type=int, default=10 * 1024 * 1024)
+    parser.add_argument("--output", type=Path)
+    args = parser.parse_args(argv)
+
+    try:
+        if args.output is not None and _paths_alias(args.dataset, args.output):
+            raise ValueError("output must not alias the input CSV")
+        report = audit_group_exposure(
+            load_group_exposure_csv(
+                args.dataset, max_file_bytes=args.max_file_bytes
+            ),
+            max_group_gross_share=args.max_group_gross_share,
+            max_abs_group_net_exposure=args.max_abs_group_net_exposure,
+            max_group_concentration_hhi=args.max_group_concentration_hhi,
+            min_effective_groups=args.min_effective_groups,
+            max_details=args.max_details,
+        )
+        rendered = json.dumps(report, indent=2, ensure_ascii=False) + "\n"
+        if args.output is None:
+            print(rendered, end="")
+        else:
+            args.output.write_text(rendered, encoding="utf-8")
+    except (OSError, UnicodeError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+    return int(not report["passed"])
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

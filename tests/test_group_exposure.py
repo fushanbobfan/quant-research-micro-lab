@@ -1,7 +1,17 @@
+import contextlib
+import io
+import json
 import math
+import tempfile
 import unittest
+from pathlib import Path
 
-from quant_research_micro_lab.group_exposure import audit_group_exposure
+import quant_research_micro_lab
+from quant_research_micro_lab.group_exposure import (
+    audit_group_exposure,
+    load_group_exposure_csv,
+    main,
+)
 
 
 class GroupExposureTests(unittest.TestCase):
@@ -18,6 +28,11 @@ class GroupExposureTests(unittest.TestCase):
     def test_reports_group_exposure_and_concentration(self):
         report = audit_group_exposure(self.records)
 
+        self.assertIs(quant_research_micro_lab.audit_group_exposure, audit_group_exposure)
+        self.assertIs(
+            quant_research_micro_lab.load_group_exposure_csv,
+            load_group_exposure_csv,
+        )
         self.assertTrue(report["passed"])
         self.assertEqual(report["snapshot_count"], 2)
         self.assertEqual(report["asset_count"], 4)
@@ -122,6 +137,70 @@ class GroupExposureTests(unittest.TestCase):
                     }
                 ]
             )
+
+    def test_csv_loader_requires_the_exact_schema(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "groups.csv"
+            dataset.write_text(
+                "date,asset,weight\n2026-01-01,AAA,1\n", encoding="utf-8"
+            )
+
+            with self.assertRaisesRegex(ValueError, "header"):
+                load_group_exposure_csv(dataset)
+
+    def test_cli_writes_a_report_and_returns_one_for_a_failed_gate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "groups.csv"
+            output = Path(directory) / "report.json"
+            dataset.write_text(
+                "date,asset,group,weight\n"
+                "2026-01-01,AAA,Tech,0.7\n"
+                "2026-01-01,BBB,Health,0.3\n",
+                encoding="utf-8",
+            )
+
+            exit_code = main(
+                [
+                    str(dataset),
+                    "--max-group-gross-share",
+                    "0.6",
+                    "--output",
+                    str(output),
+                ]
+            )
+
+            self.assertEqual(exit_code, 1)
+            self.assertFalse(json.loads(output.read_text(encoding="utf-8"))["passed"])
+
+    def test_cli_prints_a_passing_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "groups.csv"
+            dataset.write_text(
+                "date,asset,group,weight\n"
+                "2026-01-01,AAA,Tech,0.5\n"
+                "2026-01-01,BBB,Health,0.5\n",
+                encoding="utf-8",
+            )
+
+            with contextlib.redirect_stdout(io.StringIO()) as stdout:
+                exit_code = main(
+                    [str(dataset), "--max-group-gross-share", "0.5"]
+                )
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(json.loads(stdout.getvalue())["passed"])
+
+    def test_cli_rejects_output_alias_and_oversized_input(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dataset = Path(directory) / "groups.csv"
+            dataset.write_text(
+                "date,asset,group,weight\n2026-01-01,AAA,Tech,1\n",
+                encoding="utf-8",
+            )
+
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(main([str(dataset), "--output", str(dataset)]), 2)
+                self.assertEqual(main([str(dataset), "--max-file-bytes", "5"]), 2)
 
 
 if __name__ == "__main__":
